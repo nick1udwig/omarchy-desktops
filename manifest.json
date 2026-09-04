@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "nick.desktops",
+  "name": "Desktops",
+  "version": "1.0.0",
+  "author": "Nick",
+  "description": "Desktop and workspace overview with window previews and drag-and-drop",
+  "kinds": [
+    "overlay",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Overview.qml",
+    "barWidget": "DesktopBar.qml"
+  },
+  "barWidget": {
+    "displayName": "Desktops",
+    "description": "Current desktop and per-monitor workspace slots",
+    "category": "Compositor",
+    "allowMultiple": false,
+    "defaultSection": "left"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -euo pipefail
+plugin_test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+bash "$plugin_test_dir/desktops-test.sh"
+bash "$plugin_test_dir/inspection-test.sh"
+bash "$plugin_test_dir/packaging-test.sh"
