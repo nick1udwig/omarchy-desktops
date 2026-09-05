@@ -4,7 +4,7 @@
   "name": "Desktops",
   "version": "1.0.0",
   "author": "Nick",
-  "description": "Desktop and workspace overview with window previews and drag-and-drop",
+  "description": "Per-monitor desktop sidebar and Exposé with live previews, filtering, and drag-and-drop",
   "kinds": [
     "overlay",
     "bar-widget"

@@ -2,7 +2,7 @@
 
 Desktop collections and a Mission Control-style overview for Omarchy. Each desktop has independent workspaces on every monitor; switching desktops switches all monitors together.
 
-This is the desktop implementation extracted into a standalone `nick.desktops` shell plugin, retaining its functionality, controller API, and session-state format. It needs no Omarchy source modifications and no compiled Hyprland plugin.
+This is a standalone `nick.desktops` shell plugin, with a per-monitor desktop sidebar and macOS-style Exposé. It needs no Omarchy source modifications and no compiled Hyprland plugin. Its live preview cards, composition, search model, and icon resolution reuse [omarchy-expose](https://github.com/kristofferR/omarchy-expose).
 
 ## Requirements
 
@@ -53,14 +53,18 @@ Your existing workspaces become Desktop 1 without moving their windows. Each mon
 | `Super + Shift + 1–9 / 0` | Move a window to that workspace and follow it |
 | `Super + Shift + Alt + 1–9 / 0` | Send a window to that workspace without following |
 
-The overview shows desktops as rows, with a group of workspace previews for each monitor. Click a workspace or window to open it. Drag a window preview to another workspace, monitor, or desktop to send it there without leaving your current desktop. Hold a drag near the top or bottom edge to scroll. Click a desktop's name to rename it, or use **New desktop** to create and switch to another one.
+The manager opens on every monitor at once. Each monitor has a left sidebar with one live thumbnail per desktop, showing that desktop's currently selected workspace on that monitor. The main Exposé area shows only windows on the current desktop's selected workspace for that monitor, not every workspace or another monitor's windows.
 
-Within the overview, use `Up / Down` for desktops, `Left / Right` or `1–9 / 0` for workspaces, `Tab / Shift + Tab` for monitors, `Enter` to open, and `Esc` to close. `Ctrl + N` creates a desktop. The first five workspace tiles are always shown; occupied workspaces and your current selection appear too.
+Click a desktop thumbnail to switch all monitors together while keeping the manager open. Click a window to activate it and close the manager everywhere. Drag a window card onto a desktop thumbnail to send it to that desktop's selected workspace on the same monitor without following it. Hold a drag near a sidebar's top or bottom edge to scroll. Double-click a desktop's name to rename it. **New desktop** or `Ctrl + N` creates and selects a desktop.
+
+Type in the top filter to search by window title or application. The filter is shared across monitors, but each grid keeps its own workspace scope. Arrow keys select windows spatially; `Space` enlarges or restores a preview when the filter is empty; `Enter` activates the selected window. `Tab / Shift + Tab` transfers keyboard control between monitors. `Esc` restores a preview, clears a nonempty filter, or closes the manager. The existing workspace-number shortcuts still select local workspaces; they are no longer represented as a grid of empty tiles in the manager.
 
 Desktop assignments and names survive configuration reloads and shell restarts, but reset on logout or reboot. Disconnecting a monitor transfers its existing workspaces to another monitor within their original desktops; reconnecting it starts fresh workspace groups. Scratchpads and pinned windows remain global; unpin a window before moving it between desktops. Disabling does not close any windows, but their underlying workspace numbers are retained. See the removal instructions below.
 
 
 ## Configuration
+
+The overview follows the active Omarchy theme, including menu colors and transparency, selection colors, border gradients/widths, font sizing, and spacing. Sidebar, controls, and Exposé previews use Hyprland's `decoration:rounding` through the shell's shared style: `0` is square, a positive value is rounded. The manager refreshes that setting when opened; no separate desktop-plugin theme configuration is needed.
 
 `omarchy_desktops` retains the existing options:
 
@@ -72,7 +76,7 @@ Desktop assignments and names survive configuration reloads and shell restarts, 
 
 Edit this checkout directly. After QML changes, run `omarchy restart shell`. After Lua changes, run `hyprctl reload` and check `hyprctl configerrors`. Keep the normal session `OMARCHY_PATH`; it still points to Omarchy, not this plugin.
 
-Run the independent controller, keybinding-inspection, JavaScript model, and packaging tests with Bash, Lua, and Node.js:
+Run the independent controller, keybinding-inspection, workspace-scoping, Exposé composition, JavaScript model, and packaging tests with Bash, Lua, and Node.js:
 
 ```bash
 ./test/run
@@ -98,4 +102,4 @@ Workspace contents are not deleted or renumbered. Within the same session, re-en
 
 ## License
 
-MIT; see [LICENSE](LICENSE). Omarchy's copyright notice is retained for the extracted code and test helpers.
+MIT; see [LICENSE](LICENSE). Omarchy's copyright notice is retained for the extracted code and test helpers. Vendored Exposé components retain Harel Malka's and kristofferR's notices in [their license](vendor/expose/LICENSE); [provenance and local adaptations](vendor/expose/UPSTREAM.md) are documented alongside the code.

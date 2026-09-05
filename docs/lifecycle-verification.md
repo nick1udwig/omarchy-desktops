@@ -16,6 +16,8 @@ No user-repository commits or remote publishing were performed. This exercises i
 
 `./test/run` passes the controller, shortcut callbacks, JavaScript model, packaging, and keybinding-inspection regression tests. The inspection regression fails against the original controller and passes with the guard, including the disabled-controller case. Bash syntax checks, Lua parsing, and `omarchy plugin validate` also pass.
 
-## Final live shortcut verification: pending unlock
+## Final live shortcut verification: passed
 
-The session locked automatically before the final physical-keypress tests of the new shortcuts. The test stopped before moving a window when its disposable terminal could not receive focus. The lock was not bypassed or restarted. Recheck opening the manager, switching desktops in both directions, and bringing a disposable window in both directions after normal user authentication; inspect a screenshot and short transition recording before marking these checks complete.
+The initial check paused when the session locked automatically. After normal user authentication, all five shortcuts were exercised with virtual keyboard input: Super+D opened and closed the manager, Ctrl+Super+Up/Down switched all three monitors together, and Ctrl+Shift+Super+Up/Down brought a disposable window along in both directions while preserving its monitor and local workspace. Screenshots and a short transition recording were inspected. The lock was not bypassed or restarted.
+
+The manager-installed clone was moved into the existing backup directory, and the development symlink to `~/Work/git/omarchy-desktops` was restored. Hyprland reloaded without configuration errors and the new per-monitor Exposé UI was activated. The original desktop selections were restored and only disposable test windows were closed. See [UX verification](ux-verification.md) for the new manager's live checks.

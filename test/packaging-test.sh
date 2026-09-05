@@ -25,8 +25,10 @@ const controller = fs.readFileSync(path.join(root, 'hypr/desktops.lua'), 'utf8')
 const bar = fs.readFileSync(path.join(root, 'DesktopBar.qml'), 'utf8')
 assert(controller.includes('options.overview_plugin or "' + manifest.id + '"'), 'controller targets this plugin by default')
 assert(bar.includes('moduleName: "' + manifest.id + '"'), 'bar targets this plugin by default')
-for (const filename of ['hypr/desktops.lua', 'DesktopBar.qml', 'DesktopState.qml', 'DesktopModel.js', 'Overview.qml', 'WorkspaceTile.qml', 'WindowPreview.qml']) {
+for (const filename of ['hypr/desktops.lua', 'DesktopBar.qml', 'DesktopState.qml', 'DesktopModel.js', 'Overview.qml', 'OverviewScreen.qml', 'OverviewModel.js', 'DesktopThumbnail.qml', 'ExposeCard.qml', 'PreviewClip.qml']) {
   const text = fs.readFileSync(path.join(root, filename), 'utf8')
   assert(!text.includes('/Work/git/omarchy/') && !text.includes('shell/plugins/desktops') && !text.includes('default/hypr/desktops'), 'runtime file has no former checkout dependency: ' + filename)
 }
+const attribution = fs.readFileSync(path.join(root, 'vendor/expose/LICENSE'), 'utf8')
+assert(attribution.includes('Harel Malka') && attribution.includes('kristofferR'), 'vendored Exposé components retain both upstream copyright notices')
 JS

@@ -1,0 +1,9 @@
+# Exposé components
+
+Source: [kristofferR/omarchy-expose](https://github.com/kristofferR/omarchy-expose), commit `7a31c5e846a2e12bc1353ba5a0d90d42cc4f2dc8` (version 4.1.0). These files are vendored so the desktop plugin does not require a second plugin installation or a network connection at runtime.
+
+`WindowModel.js` and `IconResolver.js` are unchanged upstream files. `WindowCard.qml` adds an interaction opt-out for the desktop drag-and-drop adapter, exposes capture availability and corner radius for diagnostics, and constrains capture resolution. Preview corners follow `Style.cornerRadius` without a minimum; borders use Omarchy's surface/active-border specifications, including gradients and per-side widths. Floating captions sit outside the preview frame on a transparent item; integrated captions retain their own optional surface. `Layout.js` extracts the composition and Quick Look geometry from upstream `Overview.qml`, replacing access to its root object with explicit dependencies and arguments.
+
+The surrounding per-monitor surfaces, desktop sidebar, synchronized filter, desktop-controller integration, and drag-and-drop adapter are implemented by Omarchy Desktops. Upstream's single-display overlay, hot corners, settings UI, activation script, and compositor-wide blur helper are not installed or run.
+
+Copyright (c) 2026 Harel Malka and kristofferR. Distributed under the MIT license in [LICENSE](LICENSE).
