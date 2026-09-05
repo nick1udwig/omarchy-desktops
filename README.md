@@ -55,6 +55,8 @@ Your existing workspaces become Desktop 1 without moving their windows. Each mon
 
 The manager opens on every monitor at once. Each monitor has a left sidebar with one live thumbnail per desktop, showing that desktop's currently selected workspace on that monitor. The main Exposé area shows only windows on the current desktop's selected workspace for that monitor, not every workspace or another monitor's windows.
 
+Previews share a capture budget of about 30 frames per second across all monitors. Window cards refresh up to five times per second, sidebar thumbnails once per second, and an enlarged Space preview targets 15 frames per second when budget is available. With many windows, each preview updates less often. Movement and selection animations run independently; dragging pauses capture while retaining the last frames.
+
 Click a desktop thumbnail to switch all monitors together while keeping the manager open. Click a window to activate it and close the manager everywhere. Drag a window card onto a desktop thumbnail to send it to that desktop's selected workspace on the same monitor without following it. Hold a drag near a sidebar's top or bottom edge to scroll. Double-click a desktop's name to rename it. **New desktop** or `Ctrl + N` creates and selects a desktop.
 
 Type in the top filter to search by window title or application. The filter is shared across monitors, but each grid keeps its own workspace scope. Arrow keys select windows spatially; `Space` enlarges or restores a preview when the filter is empty; `Enter` activates the selected window. `Tab / Shift + Tab` transfers keyboard control between monitors. `Esc` restores a preview, clears a nonempty filter, or closes the manager. The existing workspace-number shortcuts still select local workspaces; they are no longer represented as a grid of empty tiles in the manager.
@@ -76,7 +78,7 @@ The overview follows the active Omarchy theme, including menu colors and transpa
 
 Edit this checkout directly. After QML changes, run `omarchy restart shell`. After Lua changes, run `hyprctl reload` and check `hyprctl configerrors`. Keep the normal session `OMARCHY_PATH`; it still points to Omarchy, not this plugin.
 
-Run the independent controller, keybinding-inspection, workspace-scoping, Exposé composition, JavaScript model, and packaging tests with Bash, Lua, and Node.js:
+Run the independent controller, keybinding-inspection, workspace-scoping, Exposé composition, capture-scheduling, JavaScript model, and packaging tests with Bash, Lua, and Node.js:
 
 ```bash
 ./test/run
@@ -88,6 +90,7 @@ The tests do not need an Omarchy source checkout or a running compositor. Manife
 For live verification, use a disposable test window, confirm coordinated monitor switching and drag-and-drop, and inspect `omarchy capture screenshot fullscreen save`. For transitions, record a short clip with `omarchy screenrecord --fullscreen` and stop it with `omarchy screenrecord --stop-recording`. Never move or close unrelated user windows as part of a test.
 
 See [Architecture](docs/architecture.md) for controller ownership, state, and the UI boundary.
+See [Performance](docs/performance.md) for the capture design and live measurements.
 
 ## Disabling or removing
 

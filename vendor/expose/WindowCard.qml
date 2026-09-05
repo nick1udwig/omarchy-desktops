@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell.Hyprland
-import Quickshell.Wayland
+import "../.." as Desktops
 import "WindowModel.js" as WindowModel
 import qs.Commons
 import qs.Ui
@@ -132,26 +132,17 @@ Item {
                 CardText {
                     anchors.centerIn: parent
                     text: "Live preview unavailable"
+                    visible: !livePreview.hasContent
                     opacity: 0.45
                 }
 
-                Item {
-                    anchors.centerIn: parent
-                    width: parent.width * 2
-                    height: parent.height * 2
-                    scale: 0.5
-                    layer.enabled: true
-                    layer.smooth: true
-
-                    ScreencopyView {
-                        id: livePreview
-                        anchors.fill: parent
-                        captureSource: WindowModel.waylandFor(card.modelData)
-                        live: card.controller.opened && card.inLayout
-                        paintCursor: false
-                        constraintSize: Qt.size(Math.max(1, width), Math.max(1, height))
-                    }
-
+                Desktops.CapturedPreview {
+                    id: livePreview
+                    anchors.fill: parent
+                    scheduler: card.controller.manager.captureScheduler
+                    source: WindowModel.waylandFor(card.modelData)
+                    capturing: card.controller.opened && card.inLayout
+                    refreshInterval: card.previewed ? 66 : 200
                 }
 
                 Loader {
@@ -186,7 +177,7 @@ Item {
                 radius: previewFrame.radius
                 color: "black"
                 visible: false
-                layer.enabled: true
+                layer.enabled: previewFrame.radius > 0
                 layer.smooth: true
             }
 

@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "DesktopModel.js" as Geometry
@@ -19,7 +18,7 @@ BorderSurface {
   readonly property int slotNumber: workspace ? workspace.slot : 1
   readonly property bool current: desktopId === DesktopState.current
   readonly property var windowsSource: {
-    var revision = manager.modelRevision
+    if (!manager.opened) return []
     return Model.windowsFor(DesktopState.snapshot, desktopId, output.name, manager.toplevels, "")
   }
   property var windows: []
@@ -62,12 +61,12 @@ BorderSurface {
           height: placement.height
           radius: Style.cornerRadius * mini.width / Math.max(1, tile.output.width)
           Rectangle { anchors.fill: parent; color: Color.background }
-          ScreencopyView {
+          CapturedPreview {
             anchors.fill: parent
-            captureSource: modelData.wayland
-            live: tile.capturing
-            paintCursor: false
-            constraintSize: Qt.size(Math.max(1, width * 2), Math.max(1, height * 2))
+            scheduler: tile.manager.captureScheduler
+            source: modelData.wayland
+            capturing: tile.capturing
+            refreshInterval: 1000
           }
         }
       }

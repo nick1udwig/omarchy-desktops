@@ -91,7 +91,12 @@ function composeRows(rows, scale, width, height, gap, padding, footerHeight) {
 }
 
 function computeWindowLayout(toplevels, width, height, gap, padding, footerHeight, viewportRatioHint) {
-    var count = toplevels.length;
+    return computeLayoutForRatios(toplevels.map(function(top) { return WindowModel.aspectRatioFor(top); }),
+        width, height, gap, padding, footerHeight, viewportRatioHint);
+}
+
+function computeLayoutForRatios(ratios, width, height, gap, padding, footerHeight, viewportRatioHint) {
+    var count = ratios.length;
     if (!count || width <= 0 || height <= 0)
         return [];
 
@@ -100,7 +105,7 @@ function computeWindowLayout(toplevels, width, height, gap, padding, footerHeigh
     var availableHeight = Math.max(1, height - edgeInset * 2);
     var entries = [];
     for (var index = 0; index < count; index++) {
-        var ratio = WindowModel.aspectRatioFor(toplevels[index]);
+        var ratio = ratios[index];
         var adaptiveWeight = Math.max(0.72, Math.min(1.28, Math.sqrt(ratio / 1.6)));
         entries.push({
             index: index,
@@ -194,5 +199,4 @@ function previewRectFor(top, sourceRect, width, height, padding, footerHeight, p
         height: cardHeight
     };
 }
-
 

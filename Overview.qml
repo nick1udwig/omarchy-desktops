@@ -1,5 +1,4 @@
 import QtQuick
-import QtQml.Models
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
@@ -16,10 +15,10 @@ Item {
   property string filterText: ""
   property string keyboardOutput: ""
   property string draggedWindow: ""
-  property int modelRevision: 0
   property int wallpaperRevision: 0
   property var panels: ({})
   property var iconCache: ({})
+  readonly property alias captureScheduler: captures
   readonly property var toplevels: Hyprland.toplevels.values
   readonly property int selectedDesktop: DesktopState.current
   readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state"
@@ -34,7 +33,6 @@ Item {
     wallpaperRevision++
     Hyprland.refreshToplevels()
     opened = true
-    modelRevision++
     Qt.callLater(function() { root.focusOutput(root.keyboardOutput) })
   }
 
@@ -97,21 +95,9 @@ Item {
     return result
   }
 
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) { if (root.opened) root.modelRevision++ }
-  }
-
-  Instantiator {
-    model: root.opened ? Hyprland.toplevels : null
-    delegate: Connections {
-      required property var modelData
-      target: modelData
-      function onWorkspaceChanged() { root.modelRevision++ }
-      function onMonitorChanged() { root.modelRevision++ }
-      function onLastIpcObjectChanged() { root.modelRevision++ }
-      function onWaylandHandleChanged() { root.modelRevision++ }
-    }
+  CaptureScheduler {
+    id: captures
+    active: root.opened && root.draggedWindow === ""
   }
 
   Connections {
@@ -124,7 +110,8 @@ Item {
     function status(): string {
       var outputs = []
       for (var name in root.panels) outputs.push(root.panels[name].status())
-      return JSON.stringify({ opened: root.opened, desktop: root.selectedDesktop, filter: root.filterText, keyboardOutput: root.keyboardOutput, outputs: outputs })
+      return JSON.stringify({ opened: root.opened, desktop: root.selectedDesktop, filter: root.filterText, keyboardOutput: root.keyboardOutput,
+        captures: { active: captures.active, views: captures.viewCount, requests: captures.requests }, outputs: outputs })
     }
     function close(): void { root.close() }
     function geometry(): string { return JSON.stringify(root.geometry()) }

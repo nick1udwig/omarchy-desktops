@@ -30,7 +30,7 @@ Item {
       radius: root.radius
       color: "black"
       visible: false
-      layer.enabled: true
+      layer.enabled: root.radius > 0
       layer.smooth: true
     }
   ]

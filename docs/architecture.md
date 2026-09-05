@@ -33,11 +33,15 @@ Each surface has a `DesktopThumbnail.qml` sidebar with one item per desktop. Its
 
 `vendor/expose/` vendors the MIT-licensed preview cards, native window model, icon resolver, and extracted composition/Quick Look geometry from `kristofferR/omarchy-expose`. `ExposeCard.qml` adapts those cards to desktop drag-and-drop; `OverviewModel.js` supplies desktop-aware scoping and spatial selection. The upstream single-display overlay, hot corners, settings panel, activation helper, and compositor-wide blur mutation are not used. Background blur is local to the overlay's wallpaper image.
 
-Window cards keep stable toplevel identities across metadata updates so filter changes can animate existing cards without rebuilding every capture. Ineligible cards stop live capture; hidden surfaces release their card delegates. Sidebar captures stop offscreen and when the manager closes. Qt sequence wrappers are normalized when processing IPC geometry.
+Window cards keep stable toplevel identities across metadata updates. Only the selected workspace's unfiltered windows get card delegates; filtering hides those delegates without recreating their captures. Hidden surfaces release their card delegates. Sidebar captures stop offscreen and when the manager closes. Qt sequence wrappers are normalized when processing IPC geometry.
+
+`CapturedPreview.qml` uses single-frame exports through `CaptureScheduler.qml` and its round-robin queue in `CaptureScheduler.js`. Every output and sidebar shares one request per 33 ms tick, including first frames. Cards request updates every 200 ms, sidebar previews every 1000 ms, and Quick Look every 66 ms when budget permits. Captures retain their buffers between updates; closing releases all preview delegates, and dragging pauses the scheduler. A pending first frame does not block other sources; stopped streams leave the capture queue idle for that source until it is replaced or reopened. `constraintSize` is not a capture-resolution limit: Quickshell's Hyprland backend exports full-size window buffers regardless of display size.
+
+Window membership and search bindings observe the toplevel properties they read directly, without invalidating every surface on every raw compositor event. Composition depends on a primitive aspect-ratio signature, so title-only IPC updates do not rerun the row search or allocate a new layout. The preview samples the exported texture directly, with no doubled-size intermediate layer; only rounded previews use a masking layer.
 
 Overview chrome uses `Color.menu` and Omarchy's `BorderSurface` / `Border` specifications so palette roles, alpha, gradients, and border widths remain theme-owned. Corner radii derive from `Style.cornerRadius`; opening refreshes the compositor-derived setting. Sidebar workspace previews preserve monitor proportions. `PreviewClip.qml` masks their wallpaper and capture content only for nonzero radii, with the mask texture outside the captured layer to avoid circular texture dependencies. The larger Exposé previews retain the upstream mask layout and use the same corner setting without a positive minimum.
 
-The `desktops-overview` IPC target exposes `status`, `geometry`, and `close` for diagnostics. Status reports the shared filter, keyboard output, and each surface's workspace and window membership. Geometry is in compositor logical coordinates and identifies desktop thumbnails, filters, and Exposé cards, including preview availability; it is not persisted. Desktop mutation is through the Lua controller, not through this diagnostics target.
+The `desktops-overview` IPC target exposes `status`, `geometry`, and `close` for diagnostics. Status reports the shared filter, keyboard output, each surface's workspace and window membership, and capture activity, registered view count, and cumulative request count. The request counter counts calls scheduled by the plugin; Quickshell may already have a request waiting for compositor damage. Geometry is in compositor logical coordinates and identifies desktop thumbnails, filters, and Exposé cards, including preview availability; it is not persisted. Desktop mutation is through the Lua controller, not through this diagnostics target.
 
 ## Verification
 
@@ -46,6 +50,8 @@ The `desktops-overview` IPC target exposes `status`, `geometry`, and `close` for
 `bash test/inspection-test.sh` reproduces the keybinding inspector's mock API and verifies that all bindings remain discoverable without compositor initialization or session-state I/O, including when the controller is disabled.
 
 `bash test/overview-test.sh` checks per-monitor selected-workspace scoping, shared filtering without monitor leakage, pinned and closed windows, stable card identities, spatial keyboard selection, and non-overlapping Exposé layouts on landscape, portrait, and small surfaces.
+
+`bash test/performance-test.sh` checks the shared request budget and fairness with 60 previews, per-view deadlines, pending/disabled sources, and delegate removal around the round-robin cursor.
 
 `bash test/appearance-test.sh` guards theme-driven square/rounded corners, menu palette and selection roles, border-spec integration, floating captions, and refreshing the compositor preference when opening. Live verification additionally checks that rounded masks preserve capture content and that both light and dark palettes remain readable.
 

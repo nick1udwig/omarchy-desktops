@@ -22,15 +22,13 @@ PanelWindow { // qmllint disable uncreatable-type
   readonly property var workspace: Model.selectedWorkspace(DesktopState.snapshot, DesktopState.current, outputName)
   readonly property var desktop: DesktopState.desktops[DesktopState.current - 1]
   readonly property var screenToplevelsSource: {
-    var revision = manager.modelRevision
-    return Model.windowsFor(DesktopState.snapshot, DesktopState.current, outputName, manager.toplevels, manager.filterText)
+    var needle = String(manager.filterText || "").trim().toLowerCase()
+    return needle ? candidates.filter(function(top) { return WindowModel.searchTextFor(top).indexOf(needle) !== -1 }) : candidates
   }
   property var screenToplevels: []
   readonly property var candidates: {
-    var revision = manager.modelRevision
-    return Array.prototype.filter.call(manager.toplevels, function(top) {
-      return WindowModel.isEligible(top) && WindowModel.isOnScreen(top, surface.outputName, true)
-    })
+    if (!visible) return []
+    return Model.windowsFor(DesktopState.snapshot, DesktopState.current, outputName, manager.toplevels, "")
   }
   property var cardToplevels: []
   property int selectedIndex: 0
@@ -334,7 +332,10 @@ PanelWindow { // qmllint disable uncreatable-type
         id: grid
         Layout.fillWidth: true
         Layout.fillHeight: true
-        readonly property var windowLayout: ExposeLayout.computeWindowLayout(surface.screenToplevels, width, height, Style.space(64), Style.spacing.sm, surface.windowFooterHeight, width / Math.max(1, height))
+        // IPC replaces the whole metadata object even for a title change.
+        // Only changed aspect ratios should invalidate the costly composition.
+        readonly property string layoutRatios: surface.screenToplevels.map(function(top) { return WindowModel.aspectRatioFor(top) }).join(",")
+        readonly property var windowLayout: ExposeLayout.computeLayoutForRatios(layoutRatios ? layoutRatios.split(",").map(Number) : [], width, height, Style.space(64), Style.spacing.sm, surface.windowFooterHeight, width / Math.max(1, height))
         scale: 0.96 + surface.progress * 0.04
         MouseArea {
           anchors.fill: parent
