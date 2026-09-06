@@ -7,7 +7,9 @@ function luaString(value) {
 
 // IPC geometry uses Qt sequence wrappers, which have length/index access but
 // do not necessarily pass JavaScript's Array.isArray().
+// Native arrays are reused; callers treat the result as read-only.
 function array(value) {
+  if (Array.isArray(value)) return value
   if (!value || typeof value === "string" || typeof value.length !== "number") return []
   return Array.prototype.slice.call(value)
 }

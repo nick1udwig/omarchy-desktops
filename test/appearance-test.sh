@@ -23,12 +23,12 @@ for (const radius of [0, 2, 8, 16, 24]) {
   assertEqual(vm.runInNewContext(expression(clip, 'radius'), {Style}), radius, `capture clipping follows rounding ${radius}`)
 }
 assert(!/radius:\s*(?:Style\.space\(|Math\.max\([1-9])/.test(screen + thumbnail + card), 'surface corners have no hardcoded positive radius')
-assert(clip.includes('layer.enabled: root.radius > 0') && card.includes('layer.enabled: radius > 0'), 'square previews skip rounded offscreen masking')
+assert(clip.includes('layer.enabled: root.radius > 0') && card.includes('Desktops.PreviewClip {'), 'grid and sidebar share square/rounded preview clipping')
 assert(screen.includes('color: Color.menu.background') && screen.includes('color: Color.menu.scrim'), 'surfaces retain theme-provided menu color and opacity')
 assert(thumbnail.includes('Color.menu.selectedBackground') && thumbnail.includes('Color.menu.selectedText'), 'desktop selection uses the menu selection palette')
 for (const [name, text] of [['overview',screen],['thumbnail',thumbnail],['card',card]]) {
   assert(text.includes('Border.surfaceSpec(') && text.includes('Border.hyprlandActiveSpec('), `${name} preserves theme border gradients and widths`)
 }
-assert(screen.includes('windowFooterStyle: "floating"'), 'window captions use the upstream floating presentation')
+assert(card.includes('objectName: "window-caption"') && !card.includes('sourceComponent:'), 'floating captions are created directly without unused footer loaders')
 assert(read('Overview.qml').includes('Style.refresh()'), 'opening refreshes the user’s current compositor corner setting')
 JS

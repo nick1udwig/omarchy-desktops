@@ -9,6 +9,7 @@ import "DesktopModel.js" as Model
 Item {
   id: root
   property var snapshot: ({})
+  property string snapshotText: ""
   property string error: ""
   property var queue: []
   readonly property bool enabled: snapshot.enabled === true
@@ -20,7 +21,12 @@ Item {
   readonly property string statePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-desktops-" + Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") + ".json"
 
   function accept(text) {
-    try { snapshot = JSON.parse(text) } catch (e) { console.warn("Invalid desktop snapshot:", e) }
+    // A controller event and the file watcher can report the same write.
+    if (text === snapshotText) return
+    try {
+      snapshot = JSON.parse(text)
+      snapshotText = text
+    } catch (e) { console.warn("Invalid desktop snapshot:", e) }
   }
 
   FileView {
@@ -30,7 +36,7 @@ Item {
     printErrors: false
     onLoaded: root.accept(text())
     onFileChanged: reload()
-    onLoadFailed: root.snapshot = ({})
+    onLoadFailed: { root.snapshotText = ""; root.snapshot = ({}) }
   }
 
   Connections {
@@ -38,7 +44,7 @@ Item {
     function onRawEvent(event) {
       // Also pick up enabling after shell startup, when there was no file to
       // watch, and disabling the controller on a configuration reload.
-      if (event.name === "custom" || event.name === "configreloaded") stateFile.reload()
+      if (event.name === "configreloaded" || (event.name === "custom" && event.data === "omarchy-desktops")) stateFile.reload()
     }
   }
 

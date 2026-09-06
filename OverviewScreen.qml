@@ -32,20 +32,18 @@ PanelWindow { // qmllint disable uncreatable-type
   }
   property var cardToplevels: []
   property int selectedIndex: 0
-  property int hoveredIndex: -1
   property int previewIndex: -1
   property int previewExitIndex: -1
   property real progress: opened ? 1 : 0
   property real dragY: -1
   readonly property bool motionSettled: progress > 0.99 && manager.draggedWindow === ""
-  readonly property string windowFooterStyle: "floating"
   readonly property int windowFooterHeight: Style.space(40)
-  readonly property bool settingsOpen: false
   readonly property int previewAnimationDuration: 220
   readonly property int previewAnimationEasing: Easing.OutCubic
   readonly property int previewFadeDuration: 150
   readonly property real sidebarWidth: Math.min(Style.space(238), width * 0.23)
   property bool registered: false
+  property bool focusPrimed: false
 
   screen: null
   visible: opened || progress > 0
@@ -54,7 +52,11 @@ PanelWindow { // qmllint disable uncreatable-type
   color: "transparent"
   WlrLayershell.namespace: "omarchy-desktop-overview"
   WlrLayershell.layer: WlrLayer.Overlay
-  WlrLayershell.keyboardFocus: !opened ? WlrKeyboardFocus.None : acceptsKeyboard ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
+  // Persistent Exclusive focus also grabs pointer input from other monitors.
+  // Prime keyboard focus briefly, then let each output receive its own input.
+  WlrLayershell.keyboardFocus: !opened || !acceptsKeyboard ? WlrKeyboardFocus.None
+    : focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
+  onBackingWindowVisibleChanged: if (backingWindowVisible && opened && acceptsKeyboard) focusSearch()
 
   function syncCards() {
     if (!Model.sameWindows(cardToplevels, candidates)) cardToplevels = candidates
@@ -89,14 +91,16 @@ PanelWindow { // qmllint disable uncreatable-type
 
   Behavior on progress { NumberAnimation { duration: 190; easing.type: Easing.OutCubic } }
 
-  function focusSearch() { if (opened) search.forceActiveFocus() }
+  function focusSearch() {
+    if (!opened) return
+    search.forceActiveFocus()
+    if (acceptsKeyboard) {
+      focusPrimed = false
+      if (backingWindowVisible) focusPrime.restart()
+    }
+  }
   function takeKeyboard() { if (manager.keyboardOutput !== outputName) manager.focusOutput(outputName) }
-  function workspaceName(top) { return String(workspace ? workspace.slot : 1) }
-  function iconFor(top) { return manager.iconFor(top) }
-  function aspectRatioFor(top) { return WindowModel.aspectRatioFor(top) }
-  function previewRectFor(top, rect, w, h, padding, footer) { return ExposeLayout.previewRectFor(top, rect, w, h, padding, footer, windowFooterStyle) }
   function activate(top) { if (top) manager.focusWindow(top.address) }
-  function requestClose(top) { if (top && top.wayland) top.wayland.close() }
   function trackDrag(item, x, y) { dragY = item.mapToItem(sidebar, x, y).y }
   function togglePreview() {
     if (previewIndex >= 0) { previewExitIndex = previewIndex; previewIndex = -1; previewExit.restart() }
@@ -147,6 +151,7 @@ PanelWindow { // qmllint disable uncreatable-type
     return result
   }
 
+  Timer { id: focusPrime; interval: 75; onTriggered: surface.focusPrimed = true }
   Timer { id: previewExit; interval: 240; onTriggered: surface.previewExitIndex = -1 }
   Timer {
     interval: 30
@@ -273,7 +278,7 @@ PanelWindow { // qmllint disable uncreatable-type
             clip: true
             maximumLength: 200
             onTextEdited: surface.manager.filterText = text
-            onActiveFocusChanged: if (activeFocus) surface.manager.keyboardOutput = surface.outputName
+            TapHandler { onPressedChanged: if (pressed) surface.takeKeyboard() }
             Keys.priority: Keys.BeforeItem
             Keys.onPressed: function(event) { surface.handleKey(event) }
             Text {

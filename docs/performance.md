@@ -37,3 +37,23 @@ Live checks confirmed captured content on every grid card, shared request pacing
 To inspect a running session, use `omarchy-shell desktops-overview status`. Its `captures` object reports `active`, `views`, and cumulative `requests`. Compare request counts over a known interval with the overview open and then closed. Requests can be no-ops when Quickshell already has a capture pending for compositor damage; the counter measures scheduled calls, not completed frames.
 
 The remaining fixed cost is exporting native-size buffers. Sharing one exported buffer between a grid card and its sidebar copy could reduce this further, but requires additional texture ownership across surfaces or support in the capture backend. The scheduler bounds the current implementation's work without that dependency.
+
+## Layout and maintenance pass, 2026-09-05
+
+The layout now solves the common preview scale directly from each row's width and the combined height. Natural dimensions are computed and sorted once. Positioned rectangles are allocated only for the winning row arrangement, replacing the repeated trial compositions used by the previous binary search.
+
+An isolated Node.js benchmark compared the implementation at `ba3ceb8` with this change. Each case used a 1920×1080 area and repeating aspect ratios 0.45, 1, 1.6, 2.5, and 4. After 50 warm-up calls, five alternating runs of 200 calls per implementation were measured; the table reports median time per call.
+
+| Windows | Previous layout | Direct calculation | Speedup |
+| --- | ---: | ---: | ---: |
+| 6 | 0.143 ms | 0.012 ms | 12.3× |
+| 20 | 0.806 ms | 0.048 ms | 16.8× |
+| 60 | 1.440 ms | 0.095 ms | 15.2× |
+
+These results measure JavaScript layout work, not overall frame rate or Quickshell's rendering performance. A separate comparison of 500 deterministic generated cases found no lost feasible layouts, smaller previews, overlap, or viewport overflow. The direct solution can make cards slightly larger by eliminating the old binary search's rounding slack. Regression tests check exact width/height limits, crowded and impossible layouts, and allocating only one final composition.
+
+The same pass removes the unused `WorkspaceTile.qml` / `WindowPreview.qml` implementation and unused card footer modes, loaders, mouse handling, and controller hooks. Grid cards and sidebar previews share `PreviewClip.qml`. Duplicate snapshot text is ignored before parsing or replacing state, unrelated custom IPC events no longer reload the snapshot, and already-native JavaScript arrays are reused during normalization.
+
+The standalone suite and manifest validation pass. Isolated Quickshell checks compiled all overview components, instantiated the card in a hidden window, verified Quick Look geometry and filtering, and confirmed that 100 duplicate snapshots cause no state updates. After reloading in an unlocked session, live checks verified capture content on all three monitors, a shared budget of 31 scheduled requests over one second, search and title updates, Quick Look, desktop moves, capture cleanup, and square/rounded rendering. Pointer checks verified drag cancellation and geometry restoration, zero capture requests during a held drag, dropping onto another desktop’s remembered workspace, and clicking the moved card to activate it. Test windows were closed and the original desktop, focus, cursor position, and rounding restored.
+
+Live testing also exposed a focus problem: keeping one monitor’s layer surface in exclusive keyboard mode prevented pointer events from reaching the other monitors. The selected surface now acquires exclusive focus briefly after mapping and releases it to on-demand mode, following Omarchy’s existing panel behavior. Other surfaces request no keyboard focus until the user selects them. Repeated live checks verified typing without a preliminary click, Tab through all three monitors, search-field clicks on each monitor, and reopening during the close animation.

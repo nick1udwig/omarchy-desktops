@@ -6,9 +6,13 @@ Expose.WindowCard {
   id: card
   required property Item dragLayer
   readonly property string windowAddress: String(modelData.address || "")
-  readonly property var client: modelData.lastIpcObject || ({})
   readonly property int workspaceId: modelData.workspace ? modelData.workspace.id : 0
-  interactionsEnabled: false
+
+  function finishDrag() {
+    controller.manager.draggedWindow = ""
+    x = Qt.binding(function() { return card.layoutRect.x })
+    y = Qt.binding(function() { return card.layoutRect.y })
+  }
 
   Drag.active: pointer.drag.active
   Drag.source: card
@@ -27,13 +31,9 @@ Expose.WindowCard {
     onEntered: {
       card.hovered = true
       card.controller.takeKeyboard()
-      card.controller.hoveredIndex = card.slot
       card.controller.selectedIndex = card.slot
     }
-    onExited: {
-      card.hovered = false
-      if (card.controller.hoveredIndex === card.slot) card.controller.hoveredIndex = -1
-    }
+    onExited: card.hovered = false
     onPressed: {
       card.controller.takeKeyboard()
       card.controller.manager.draggedWindow = card.windowAddress
@@ -42,16 +42,10 @@ Expose.WindowCard {
     onReleased: {
       var moved = drag.active
       if (moved && card.controller.manager.draggedWindow === card.windowAddress) card.Drag.drop()
-      card.controller.manager.draggedWindow = ""
-      card.x = Qt.binding(function() { return card.layoutRect.x })
-      card.y = Qt.binding(function() { return card.layoutRect.y })
+      card.finishDrag()
       if (!moved) card.controller.activate(card.modelData)
     }
-    onCanceled: {
-      card.controller.manager.draggedWindow = ""
-      card.x = Qt.binding(function() { return card.layoutRect.x })
-      card.y = Qt.binding(function() { return card.layoutRect.y })
-    }
+    onCanceled: card.finishDrag()
   }
 
   states: State {

@@ -58,6 +58,19 @@ for (const size of [[1100,740],[940,2100],[700,560],[300,240]]) {
   }
 }
 pass('upstream composition stays in bounds without overlaps on landscape, portrait, and small surfaces')
+const widthBound = layout.computeWindowLayout([top('width','left',2,'Wide',1.6)],300,1000,24,6,40,0.3)[0]
+assert(Math.abs(widthBound.width - 276) < 1e-8, 'composition reaches its exact width bound without trial-layout rounding')
+const heightBound = layout.computeWindowLayout([top('height','left',2,'Tall',0.45)],1000,300,24,6,40,1000/300)[0]
+assert(Math.abs(heightBound.height - 276) < 1e-8, 'composition reaches its exact height bound including padding and captions')
+const crowded = Array.from({length:60},(_,i)=>top(String(i),'left',2,'Window',0.45+i%8*0.45))
+const compose = layout.composeRows
+let compositions = 0
+layout.composeRows = function(...args) { compositions++; return compose(...args) }
+const composed = layout.computeWindowLayout(crowded,1920,1080,24,6,40,1920/1080)
+assertEqual(composed.length, 60, 'a crowded workspace still lays out every window')
+assertEqual(compositions, 1, 'row selection allocates only the winning composition')
+layout.composeRows = compose
+assertEqual(layout.computeWindowLayout(crowded,10,10,24,6,40,1).length, 0, 'an impossible composition returns no invalid rectangles')
 const spatial = [{x:0,y:0,width:100,height:80},{x:180,y:0,width:100,height:80},{x:0,y:180,width:100,height:80}]
 assertEqual(model.directionalIndex(spatial,0,1,0),1,'Right selects the nearest right-hand card')
 assertEqual(model.directionalIndex(spatial,0,0,1),2,'Down selects the nearest lower card')

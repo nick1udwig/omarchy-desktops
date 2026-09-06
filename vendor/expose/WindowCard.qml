@@ -1,12 +1,14 @@
 import QtQuick
-import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell.Hyprland
 import "../.." as Desktops
 import "WindowModel.js" as WindowModel
+import "Layout.js" as ExposeLayout
 import qs.Commons
 import qs.Ui
 
+// Floating-caption presentation adapted from omarchy-expose. See UPSTREAM.md.
+// Pointer handling and drag-and-drop belong to ExposeCard.qml.
 Item {
     id: card
 
@@ -17,125 +19,61 @@ Item {
     required property var windowLayout
     required property real layoutAreaWidth
     required property real layoutAreaHeight
-    property bool interactionsEnabled: true
     readonly property bool hasPreview: livePreview.hasContent
     readonly property real previewRadius: Style.cornerRadius
     // Position in the filtered list; -1 hides the card.
-    readonly property int slot: card.screenToplevels.indexOf(modelData)
+    readonly property int slot: screenToplevels.indexOf(modelData)
     readonly property bool inLayout: slot >= 0
     property bool hovered: false
-    readonly property bool selected: card.acceptsKeyboard && inLayout && slot === card.controller.selectedIndex
+    readonly property bool selected: acceptsKeyboard && inLayout && slot === controller.selectedIndex
     readonly property bool focusedWindow: modelData === Hyprland.activeToplevel
-    readonly property bool previewed: card.acceptsKeyboard && inLayout && slot === card.controller.previewIndex
-    readonly property bool exitingPreview: card.acceptsKeyboard && inLayout && slot === card.controller.previewExitIndex
-    readonly property bool floatingFooter: card.controller.windowFooterStyle === "floating"
-    readonly property bool integratedFooter: card.controller.windowFooterStyle === "integrated"
-    readonly property bool overlayFooter: card.controller.windowFooterStyle === "overlay"
-    readonly property bool centeredFooter: card.controller.windowFooterStyle === "centered"
-    readonly property string windowTitle: String(modelData.title || WindowModel.appIdFor(modelData) || "Untitled window")
+    readonly property bool previewed: acceptsKeyboard && inLayout && slot === controller.previewIndex
+    readonly property bool exitingPreview: acceptsKeyboard && inLayout && slot === controller.previewExitIndex
     readonly property string applicationName: WindowModel.appIdFor(modelData) || "Application"
-    readonly property string workspaceName: card.controller.workspaceName(modelData)
-    readonly property string iconSource: card.controller.iconFor(modelData)
     readonly property var outlineSpec: focusedWindow || selected || hovered
         ? Border.hyprlandActiveSpec(Color.menu.selectedText, hovered ? Style.hoverBorderWidth : Style.focusBorderWidth)
         : Border.surfaceSpec("menu", "border", Color.menu.border, Style.normalBorderWidth)
-    // An excluded card keeps its last rectangle, so it neither
-    // animates toward the origin nor flies back in from it.
-    readonly property var packedRectSource: inLayout ? card.windowLayout[slot] : null
+    // Retain the last rectangle while filtered out, rather than moving to the origin.
+    readonly property var packedRectSource: inLayout ? windowLayout[slot] : null
     property var packedRect: Qt.rect(0, 0, 1, 1)
-    readonly property var previewRect: card.controller.previewRectFor(modelData, packedRect, card.layoutAreaWidth, card.layoutAreaHeight, Style.spacing.sm, card.controller.windowFooterHeight)
-    readonly property var layoutRect: previewed ? previewRect : packedRect
+    readonly property var layoutRect: previewed
+        ? ExposeLayout.previewRectFor(modelData, layoutAreaWidth, layoutAreaHeight, Style.spacing.sm, controller.windowFooterHeight)
+        : packedRect
 
-    onPackedRectSourceChanged: {
-        if (packedRectSource)
-            packedRect = packedRectSource;
-
-    }
-    Component.onCompleted: {
-        if (packedRectSource)
-            packedRect = packedRectSource;
-
-    }
+    onPackedRectSourceChanged: if (packedRectSource) packedRect = packedRectSource
+    Component.onCompleted: if (packedRectSource) packedRect = packedRectSource
     visible: inLayout
     x: layoutRect.x
     y: layoutRect.y
     width: layoutRect.width
     height: layoutRect.height
     z: previewed ? 11 : (exitingPreview ? 10 : 0)
-    opacity: card.controller.previewIndex < 0 || previewed ? 1 : 0.28
-
-    // Keep floating captions outside the preview frame, as in upstream.
-    BorderSurface {
-        anchors.fill: parent
-        visible: card.integratedFooter
-        radius: Style.cornerRadius
-        color: Color.menu.background
-        borderSpec: card.outlineSpec
-    }
-
-    MouseArea {
-        anchors.fill: parent
-        enabled: card.interactionsEnabled && !card.controller.settingsOpen && (card.controller.previewIndex < 0 || card.previewed)
-        hoverEnabled: true
-        onEnabledChanged: {
-            if (!enabled) {
-                card.hovered = false;
-                if (card.controller.hoveredIndex === card.slot)
-                    card.controller.hoveredIndex = -1;
-
-            }
-        }
-        onEntered: {
-            card.hovered = true;
-            if (card.acceptsKeyboard) {
-                card.controller.hoveredIndex = card.slot;
-                card.controller.selectedIndex = card.slot;
-            }
-        }
-        onExited: {
-            card.hovered = false;
-            if (card.acceptsKeyboard && card.controller.hoveredIndex === card.slot)
-                card.controller.hoveredIndex = -1;
-
-        }
-        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-        onClicked: function(mouse) {
-            if (mouse.button === Qt.MiddleButton)
-                card.controller.requestClose(card.modelData);
-            else
-                card.controller.activate(card.modelData);
-        }
-    }
+    opacity: controller.previewIndex < 0 || previewed ? 1 : 0.28
 
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Style.spacing.sm
-        spacing: card.overlayFooter ? 0 : Style.spacing.sm
+        spacing: Style.spacing.sm
 
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            Rectangle {
+            Desktops.PreviewClip {
                 id: previewFrame
-
-                readonly property real windowAspectRatio: card.controller.aspectRatioFor(card.modelData)
-
+                readonly property real windowAspectRatio: WindowModel.aspectRatioFor(card.modelData)
                 anchors.centerIn: parent
                 width: Math.min(parent.width, parent.height * windowAspectRatio)
                 height: Math.min(parent.height, parent.width / windowAspectRatio)
                 radius: card.previewRadius
-                color: Color.background
-                clip: true
-                layer.enabled: radius > 0
 
+                Rectangle { anchors.fill: parent; color: Color.background }
                 CardText {
                     anchors.centerIn: parent
                     text: "Live preview unavailable"
                     visible: !livePreview.hasContent
                     opacity: 0.45
                 }
-
                 Desktops.CapturedPreview {
                     id: livePreview
                     anchors.fill: parent
@@ -144,277 +82,82 @@ Item {
                     capturing: card.controller.opened && card.inLayout
                     refreshInterval: card.previewed ? 66 : 200
                 }
-
-                Loader {
-                    anchors.fill: parent
-                    z: 2
-                    active: card.overlayFooter
-                    sourceComponent: overlayFooter
-                }
-
-                layer.effect: MultiEffect {
-                    maskEnabled: true
-                    maskSource: previewMask
-                    maskThresholdMin: 0.5
-                    maskSpreadAtMin: 1
-                }
-
             }
 
             BorderSurface {
                 anchors.fill: previewFrame
-                visible: !card.integratedFooter
-                z: 5
                 radius: previewFrame.radius
                 color: "transparent"
                 borderSpec: card.outlineSpec
             }
-
-            Rectangle {
-                id: previewMask
-
-                anchors.fill: previewFrame
-                radius: previewFrame.radius
-                color: "black"
-                visible: false
-                layer.enabled: previewFrame.radius > 0
-                layer.smooth: true
-            }
-
         }
 
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Style.space(40)
-            visible: !card.overlayFooter
-
-            Loader {
-                anchors.fill: parent
-                sourceComponent: card.floatingFooter ? floatingFooter : (card.integratedFooter ? integratedFooter : (card.centeredFooter ? centeredFooter : null))
-            }
-
-        }
-
-    }
-
-    // Shared footer building blocks; each footer style overrides only what differs.
-    component CardText: Text {
-        textFormat: Text.PlainText
-        color: Color.menu.text
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.body
-    }
-
-    component FooterTitle: CardText {
-        text: card.windowTitle
-        font.bold: card.selected
-        elide: Text.ElideRight
-    }
-
-    component FooterIcon: Image {
-        property int iconSize: 24
-        Layout.preferredWidth: Style.space(iconSize)
-        Layout.preferredHeight: Style.space(iconSize)
-        source: card.iconSource
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-    }
-
-    component WorkspaceColumn: ColumnLayout {
-        spacing: 0
-
-        CardText {
-            Layout.alignment: Qt.AlignRight
-            text: card.workspaceName
-            color: card.focusedWindow ? Color.accent : Color.menu.text
-            font.pixelSize: Style.font.heading
-            font.bold: true
-        }
-
-        CardText {
-            Layout.alignment: Qt.AlignRight
-            text: "Workspace"
-            opacity: 0.55
-            font.pixelSize: Style.font.caption
-        }
-    }
-
-    // Only the configured footer style is instantiated per card.
-    Component {
-        id: overlayFooter
-
-        Item {
-            Rectangle {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                height: Math.min(parent.height * 0.45, Style.space(84))
-
-                gradient: Gradient {
-                    orientation: Gradient.Vertical
-
-                    GradientStop {
-                        position: 0
-                        color: "transparent"
-                    }
-
-                    GradientStop {
-                        position: 1
-                        color: Qt.rgba(0, 0, 0, 0.94)
-                    }
-                }
-            }
-
-            RowLayout {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                anchors.margins: Style.spacing.md
-                spacing: Style.spacing.md
-
-                FooterIcon { iconSize: 28 }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    FooterTitle { Layout.fillWidth: true }
-
-                    CardText {
-                        Layout.fillWidth: true
-                        text: card.applicationName
-                        opacity: 0.68
-                        font.pixelSize: Style.font.caption
-                        elide: Text.ElideRight
-                    }
-                }
-
-                WorkspaceColumn {}
-            }
-        }
-    }
-
-    Component {
-        id: floatingFooter
-
+        // The plugin always uses floating captions outside the preview frame.
         RowLayout {
+            objectName: "window-caption"
+            Layout.fillWidth: true
+            Layout.preferredHeight: card.controller.windowFooterHeight
             spacing: Style.spacing.md
 
-            FooterIcon { iconSize: 30 }
-
+            Image {
+                Layout.preferredWidth: Style.space(30)
+                Layout.preferredHeight: Style.space(30)
+                source: card.controller.manager.iconFor(card.modelData)
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+            }
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-
-                FooterTitle { Layout.fillWidth: true }
-
+                CardText {
+                    Layout.fillWidth: true
+                    text: String(card.modelData.title || WindowModel.appIdFor(card.modelData) || "Untitled window")
+                    font.bold: card.selected
+                }
                 CardText {
                     Layout.fillWidth: true
                     text: card.applicationName
                     opacity: 0.62
                     font.pixelSize: Style.font.caption
-                    elide: Text.ElideRight
                 }
             }
-
-            WorkspaceColumn {}
-        }
-    }
-
-    Component {
-        id: integratedFooter
-
-        RowLayout {
-            spacing: Style.spacing.md
-
-            FooterIcon {}
-
-            FooterTitle { Layout.fillWidth: true }
-
-            CardText {
-                text: "WS " + card.workspaceName
-                color: card.focusedWindow ? Color.accent : Color.menu.text
-                opacity: card.focusedWindow ? 1 : 0.68
-                font.pixelSize: Style.font.caption
-                font.bold: true
+            ColumnLayout {
+                spacing: 0
+                CardText {
+                    Layout.alignment: Qt.AlignRight
+                    text: String(card.controller.workspace ? card.controller.workspace.slot : 1)
+                    color: card.focusedWindow ? Color.accent : Color.menu.text
+                    font.pixelSize: Style.font.heading
+                    font.bold: true
+                }
+                CardText {
+                    Layout.alignment: Qt.AlignRight
+                    text: "Workspace"
+                    opacity: 0.55
+                    font.pixelSize: Style.font.caption
+                }
             }
         }
     }
 
-    Component {
-        id: centeredFooter
-
-        ColumnLayout {
-            spacing: 0
-
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: Style.spacing.md
-
-                FooterIcon {}
-
-                FooterTitle { Layout.maximumWidth: Math.max(1, card.width - Style.space(80)) }
-            }
-
-            CardText {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.maximumWidth: Math.max(1, card.width - Style.space(32))
-                text: card.applicationName + "  ·  Workspace " + card.workspaceName
-                color: card.focusedWindow ? Color.accent : Color.menu.text
-                opacity: card.focusedWindow ? 1 : 0.62
-                font.pixelSize: Style.font.caption
-                elide: Text.ElideRight
-            }
-        }
+    component CardText: Text {
+        textFormat: Text.PlainText
+        color: Color.menu.text
+        font.family: Style.font.menuFamily
+        font.pixelSize: Style.font.body
+        elide: Text.ElideRight
+    }
+    component CardAnimation: NumberAnimation {
+        duration: card.controller.previewAnimationDuration
+        easing.type: card.controller.previewAnimationEasing
     }
 
-    Behavior on x {
-        enabled: card.controller.motionSettled
-
-        NumberAnimation {
-            duration: card.controller.previewAnimationDuration
-            easing.type: card.controller.previewAnimationEasing
-        }
-
-    }
-
-    Behavior on y {
-        enabled: card.controller.motionSettled
-
-        NumberAnimation {
-            duration: card.controller.previewAnimationDuration
-            easing.type: card.controller.previewAnimationEasing
-        }
-
-    }
-
-    Behavior on width {
-        enabled: card.controller.motionSettled
-
-        NumberAnimation {
-            duration: card.controller.previewAnimationDuration
-            easing.type: card.controller.previewAnimationEasing
-        }
-
-    }
-
-    Behavior on height {
-        enabled: card.controller.motionSettled
-
-        NumberAnimation {
-            duration: card.controller.previewAnimationDuration
-            easing.type: card.controller.previewAnimationEasing
-        }
-
-    }
-
+    Behavior on x { enabled: card.controller.motionSettled; CardAnimation {} }
+    Behavior on y { enabled: card.controller.motionSettled; CardAnimation {} }
+    Behavior on width { enabled: card.controller.motionSettled; CardAnimation {} }
+    Behavior on height { enabled: card.controller.motionSettled; CardAnimation {} }
     Behavior on opacity {
         enabled: card.controller.motionSettled
-
-        NumberAnimation {
-            duration: card.controller.previewFadeDuration
-        }
-
+        NumberAnimation { duration: card.controller.previewFadeDuration }
     }
-
 }
