@@ -4,6 +4,12 @@ Virtual desktops with an Exposé-style overview for Omarchy.
 Each desktop has independent workspaces on every monitor; switching desktops switches all monitors together.
 Based in part on [omarchy-expose](https://github.com/kristofferR/omarchy-expose).
 
+
+
+[![Demo](https://github.com/user-attachments/assets/36b6eca6-5e97-4112-acc1-24157550e7ee)](https://github.com/user-attachments/assets/36b6eca6-5e97-4112-acc1-24157550e7ee)
+
+
+
 ## Installation
 
 Run these commands from this checkout, with no existing `nick1udwig.desktops` installation:
