@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "id": "nick.desktops",
+  "id": "nick1udwig.desktops",
   "name": "Desktops",
-  "version": "1.0.0",
-  "author": "Nick",
-  "description": "Per-monitor desktop sidebar and Exposé with live previews, filtering, and drag-and-drop",
+  "version": "0.1.0",
+  "author": "Nick Ludwig",
+  "description": "Virtual desktops and Exposé with live previews, filtering, and drag-and-drop",
   "kinds": [
     "overlay",
     "bar-widget"
