@@ -11,6 +11,33 @@ function qmlJs(file, globals = {}) {
   vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8').replace(/^\.(pragma|import).*$/gm, ''), context, {filename:file})
   return context
 }
+// Execute the screen's actual keyboard handlers with compositor focus simulated.
+const screenSource = fs.readFileSync(path.join(root, 'OverviewScreen.qml'), 'utf8')
+function screenFunction(name) {
+  return screenSource.match(new RegExp('^  function ' + name + '\\([^]*?^  }', 'm'))[0]
+}
+const keyboard = vm.createContext({
+  opened: true, acceptsKeyboard: true, backingWindowVisible: true, focusPrimed: true,
+  manager: { draggedWindow: '', filterText: '', close() { keyboard.opened = false } },
+  search: { forceActiveFocus() { keyboard.searchFocused = true } },
+  focusPrime: { restart() { keyboard.primeRestarted = true } },
+  Qt: { Key_Escape: 27 }, previewIndex: -1,
+})
+vm.runInContext(['focusSearch', 'restoreKeyboardAfterSwitch', 'handleKey'].map(screenFunction).join('\n'), keyboard)
+assert(/onWorkspaceIdChanged:\s*Qt.callLater\(restoreKeyboardAfterSwitch\)/.test(screenSource), 'native workspace changes queue keyboard recovery even when desktop indices stay equal')
+keyboard.restoreKeyboardAfterSwitch()
+assert(keyboard.searchFocused && !keyboard.focusPrimed && keyboard.primeRestarted, 'switching desktops restores search focus and requests compositor keyboard focus again')
+const escape = {key:27, accepted:false}
+keyboard.handleKey(escape)
+assert(!keyboard.opened && escape.accepted, 'Escape closes the overview after keyboard focus recovery')
+for (const mode of ['closed', 'other output', 'dragging']) {
+  keyboard.opened = mode !== 'closed'
+  keyboard.acceptsKeyboard = mode !== 'other output'
+  keyboard.manager.draggedWindow = mode === 'dragging' ? 'window' : ''
+  keyboard.searchFocused = false
+  keyboard.restoreKeyboardAfterSwitch()
+  assert(!keyboard.searchFocused, 'deferred recovery does not steal focus when ' + mode)
+}
 const WindowModel = qmlJs('vendor/expose/WindowModel.js')
 const model = qmlJs('OverviewModel.js', {WindowModel})
 const layout = qmlJs('vendor/expose/Layout.js', {WindowModel})

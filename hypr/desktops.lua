@@ -203,10 +203,41 @@ local function apply_current(focus_output)
   end
 end
 
+-- Only the desktop being viewed may remain empty. Count all owned slots,
+-- including hidden workspaces and workspaces recovered from disconnected outputs.
+local function collapse_empty(closing_window)
+  if #monitors() == 0 then return end
+  local occupied = {}
+  for _, window in ipairs(hl.get_windows()) do
+    if window ~= closing_window and window.mapped and not window.pinned then
+      local desktop_id = locate(window.workspace)
+      if desktop_id then occupied[desktop_id] = true end
+    end
+  end
+  for id = #state.desktops, 1, -1 do
+    if id ~= state.current and not occupied[id] then
+      table.remove(state.desktops, id)
+      for _, saved in pairs(state.disconnected) do
+        if id <= #saved then table.remove(saved, id) end
+      end
+      if id < state.current then state.current = state.current - 1 end
+      for next_id = id, #state.desktops do
+        local desktop = state.desktops[next_id]
+        if not desktop.renamed and desktop.name == "Desktop " .. (next_id + 1) then
+          desktop.name = "Desktop " .. next_id
+        end
+      end
+    end
+  end
+end
+
 local function transaction(callback)
   if busy then return end
   busy = true
-  local ok, err = pcall(callback)
+  local ok, err = pcall(function()
+    callback()
+    collapse_empty()
+  end)
   busy = false
   save()
   if not ok then error(err) end
@@ -253,6 +284,7 @@ function M.rename(desktop_id, name)
   assert(desktop, "Unknown desktop")
   assert(type(name) == "string" and name:match("%S") and utf8.len(name) and utf8.len(name) <= 80, "Use a name of 1–80 characters")
   desktop.name = name
+  desktop.renamed = true
   save()
 end
 
@@ -510,7 +542,13 @@ if live_compositor then
   hl.on("workspace.active", workspace_changed)
   hl.on("workspace.move_to_monitor", workspace_relocated)
   hl.on("window.open", adopt_window_workspace)
-  hl.on("window.move_to_workspace", adopt_window_workspace)
+  hl.on("window.move_to_workspace", function(window, workspace)
+    adopt_window_workspace(window, workspace)
+    if not busy then collapse_empty(); save() end
+  end)
+  hl.on("window.close", function(window)
+    if not busy then collapse_empty(window); save() end
+  end)
   hl.on("monitor.focused", function() if not busy then save() end end)
   hl.on("monitor.layout_changed", refresh_layout)
 

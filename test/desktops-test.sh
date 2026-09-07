@@ -34,6 +34,11 @@ hl = {
   get_monitor = find_monitor,
   get_active_monitor = function() return active_monitor end,
   get_active_window = function() return active_window end,
+  get_windows = function()
+    local result = {}
+    for _, window in pairs(windows) do result[#result + 1] = window end
+    return result
+  end,
   get_window = function(selector) return windows[selector:gsub("^address:", "")] end,
   get_workspace = function(id) return workspaces[tonumber(id)] end,
   get_workspaces = function()
@@ -86,6 +91,8 @@ local function visible(desktop)
   end
 end
 
+-- Keep both desktops occupied for the isolation and hotplug scenarios.
+windows.anchor1 = { mapped = true, workspace = workspaces[1] }
 local controller = load_controller()
 assert(displays[1].active_workspace.id == 1 and displays[2].active_workspace.id == 2, "adoption preserves existing workspaces")
 assert(selected(1, "left").slots[1] == 1 and selected(1, "right").slots[1] == 2, "each monitor has local workspace 1")
@@ -95,6 +102,7 @@ controller.focus(4, "right")
 visible(1)
 controller.step(1)
 visible(2)
+windows.anchor2 = { mapped = true, workspace = displays[2].active_workspace }
 assert(active_monitor.name == "right", "desktop switching preserves the focused output")
 controller.focus(2, "right")
 controller.step(-1)
@@ -311,6 +319,78 @@ moved.monitor = left
 event("workspace.move_to_monitor", moved, left)
 reconnect(right)
 assert(moved.monitor == left, "an intentional workspace move while undocked supersedes automatic restoration")
+-- Empty desktops collapse only once they are no longer being viewed.
+windows = {}
+controller.focus(1, "left")
+assert(#state().desktops == 1 and state().current == 1, "cleanup retains the current empty desktop")
+controller.add()
+assert(#state().desktops == 1 and state().current == 1, "repeated creation cannot accumulate empty desktops")
+controller.step(1)
+assert(#state().desktops == 1, "stepping past an empty desktop replaces it")
+local keeper = { address = "0x456", mapped = true, monitor = left,
+  workspace = ensure_workspace(selected(1, "right").slots[9], right) }
+windows[keeper.address] = keeper
+controller.rename(1, "Keep me")
+controller.add()
+assert(#state().desktops == 2, "a window on a hidden workspace of another output keeps its desktop")
+controller.rename(2, "Temporary")
+controller.switch(1)
+assert(#state().desktops == 1 and state().desktops[1].name == "Keep me", "leaving an empty desktop removes it and preserves custom names")
+controller.add()
+controller.switch(1)
+keeper.mapped = false
+event("window.close", keeper)
+assert(#state().desktops == 1, "closing the last window keeps the viewed desktop")
+controller.add()
+assert(#state().desktops == 1 and state().desktops[1].name == "Desktop 1", "leaving a formerly occupied desktop collapses and renumbers it")
+keeper.mapped = true
+keeper.workspace = ensure_workspace(selected(1, "left").slots[1], left)
+keeper.monitor = left
+controller.add()
+controller.move(2, "left", 1, keeper.address, true)
+assert(#state().desktops == 1 and state().current == 1, "moving the last window and following collapses its source")
+visible(1)
+controller.add()
+controller.move(2, "left", 1, keeper.address, false)
+assert(#state().desktops == 1, "silently emptying an inactive desktop collapses it")
+controller.add()
+controller.switch(1)
+-- Make a destination occupied so switching back does not remove it.
+local second = { address = "0x789", mapped = true, monitor = left,
+  workspace = keeper.workspace }
+windows[second.address] = second
+controller.add()
+controller.move(2, "left", 1, second.address, false)
+controller.switch(1)
+controller.move(2, "left", 1, keeper.address, false)
+assert(#state().desktops == 2 and state().current == 1, "silently emptying the viewed desktop keeps it until departure")
+controller.switch(2)
+assert(#state().desktops == 1 and state().current == 1, "departing after a silent move collapses the emptied source")
+controller.add()
+keeper.mapped = false
+second.mapped = false
+event("window.close", second)
+assert(#state().desktops == 1 and state().current == 1, "closing windows on an inactive desktop collapses it")
+keeper.mapped = true
+keeper.workspace = ensure_workspace(selected(1, "left").slots[1], left)
+-- An external activation also performs cleanup after switching all outputs.
+controller.add()
+local target = keeper.workspace
+hl.dispatch(hl.dsp.focus({ workspace = tostring(target.id) }))
+assert(#state().desktops == 1 and state().current == 1, "external activation collapses the empty desktop left behind")
+visible(1)
+controller = load_controller()
+assert(#state().desktops == 1, "collapsed desktops stay removed after reload")
+controller.add()
+unplug(right, left)
+local saved_right = state().disconnected.right[2].slots[1]
+controller.move(2, "left", 1, keeper.address, true)
+assert(#state().desktops == 1 and #state().disconnected.right == 1, "collapse compacts disconnected output restoration entries")
+assert(state().disconnected.right[1].slots[1] == saved_right, "restoration stays attached to the surviving desktop")
+controller = load_controller()
+reconnect(right)
+assert(selected(1, "right").slots[1] == saved_right, "reconnect after collapse and reload restores the surviving output slots")
+visible(1)
 print("ok - desktop isolation, restore, movement, external workspaces, reload, hotplug, disabling, and scaled output geometry")
 LUA
 

@@ -61,6 +61,8 @@ Click a desktop thumbnail to switch all monitors together while keeping the mana
 
 Type in the top filter to search by window title or application. The filter is shared across monitors, but each grid keeps its own workspace scope. Arrow keys select windows spatially; `Space` enlarges or restores a preview when the filter is empty; `Enter` activates the selected window. `Tab / Shift + Tab` transfers keyboard control between monitors. `Esc` restores a preview, clears a nonempty filter, or closes the manager. The existing workspace-number shortcuts still select local workspaces; they are no longer represented as a grid of empty tiles in the manager.
 
+Only the desktop you are viewing may remain empty. When you switch away from a desktop with no windows on any of its workspaces or monitors, it collapses and the remaining desktops are renumbered. This also applies after closing or moving its last window; silently emptying an inactive desktop removes it immediately. Custom names and surviving workspace selections are preserved.
+
 Desktop assignments and names survive configuration reloads and shell restarts, but reset on logout or reboot. Disconnecting a monitor transfers its existing workspaces to another monitor within their original desktops; reconnecting it restores their original groups and selections, including after a brief disconnect during resume. Scratchpads and pinned windows remain global; unpin a window before moving it between desktops. Disabling does not close any windows, but their underlying workspace numbers are retained. See the removal instructions below.
 
 

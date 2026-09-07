@@ -20,6 +20,7 @@ PanelWindow { // qmllint disable uncreatable-type
   readonly property bool opened: manager.opened
   readonly property bool acceptsKeyboard: manager.keyboardOutput === outputName
   readonly property var workspace: Model.selectedWorkspace(DesktopState.snapshot, DesktopState.current, outputName)
+  readonly property int workspaceId: workspace ? workspace.id : 0
   readonly property var desktop: DesktopState.desktops[DesktopState.current - 1]
   readonly property var screenToplevelsSource: {
     var needle = String(manager.filterText || "").trim().toLowerCase()
@@ -88,6 +89,9 @@ PanelWindow { // qmllint disable uncreatable-type
     }
   }
   onAcceptsKeyboardChanged: if (opened && acceptsKeyboard) Qt.callLater(focusSearch)
+  // Native desktop/workspace shortcuts focus a client underneath this layer.
+  // Watch the native ID: collapsing desktops can leave the desktop index equal.
+  onWorkspaceIdChanged: Qt.callLater(restoreKeyboardAfterSwitch)
   Component.onCompleted: {
     syncCards()
     syncFiltered()
@@ -105,6 +109,9 @@ PanelWindow { // qmllint disable uncreatable-type
       focusPrimed = false
       if (backingWindowVisible) focusPrime.restart()
     }
+  }
+  function restoreKeyboardAfterSwitch() {
+    if (opened && acceptsKeyboard && !manager.draggedWindow) focusSearch()
   }
   function takeKeyboard() { if (manager.keyboardOutput !== outputName) manager.focusOutput(outputName) }
   function activate(top) { if (top) manager.focusWindow(top.address) }
