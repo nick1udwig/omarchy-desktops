@@ -19,6 +19,9 @@ function createQueue() {
         return entry.view.captureEnabled && !entry.view.hasContent
       }).length
     },
+    cached: function() {
+      return this.entries.length > 0 && this.entries.every(function(entry) { return entry.view.hasContent })
+    },
     prepare: function(now, maxInFlight) {
       var inFlight = this.entries.filter(function(entry) {
         return entry.view.captureEnabled && entry.view.captureStarted && !entry.view.hasContent

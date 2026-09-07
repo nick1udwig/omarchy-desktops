@@ -10,18 +10,28 @@ BorderSurface {
   id: tile
   required property var manager
   required property var output
+  required property var captureCache
   required property int desktopId
   property bool capturing: false
+  property bool presented: false
   readonly property var desktop: DesktopState.desktops[desktopId - 1]
   readonly property var workspace: Model.selectedWorkspace(DesktopState.snapshot, desktopId, output.name)
   readonly property int workspaceId: workspace ? workspace.id : 0
   readonly property int slotNumber: workspace ? workspace.slot : 1
   readonly property bool current: desktopId === DesktopState.current
   readonly property var windowsSource: {
-    if (!manager.opened) return []
+    if (!presented) return []
     return Model.windowsFor(DesktopState.snapshot, desktopId, output.name, manager.toplevels, "")
   }
   property var windows: []
+  function previewStatus() {
+    var painted = 0
+    for (var i = 0; i < previewWindows.count; i++) {
+      var item = previewWindows.itemAt(i)
+      if (item && item.hasPreview) painted++
+    }
+    return { capturing: capturing, windows: windows.length, delegates: previewWindows.count, painted: painted }
+  }
   function syncWindows() { if (!Model.sameWindows(windows, windowsSource)) windows = windowsSource }
   onWindowsSourceChanged: syncWindows()
   Component.onCompleted: syncWindows()
@@ -51,9 +61,11 @@ BorderSurface {
       Rectangle { anchors.fill: parent; color: Color.background }
       Image { anchors.fill: parent; source: tile.manager.wallpaper; sourceSize: Qt.size(1280, 1280); fillMode: Image.PreserveAspectCrop }
       Repeater {
-        model: tile.capturing ? tile.windows : []
+        id: previewWindows
+        model: tile.presented ? tile.windows : []
         delegate: PreviewClip {
           required property var modelData
+          readonly property bool hasPreview: preview.hasContent
           readonly property var placement: Geometry.windowRect(modelData.lastIpcObject || ({}), tile.output, mini.width, mini.height)
           x: placement.x
           y: placement.y
@@ -61,9 +73,19 @@ BorderSurface {
           height: placement.height
           radius: Style.cornerRadius * mini.width / Math.max(1, tile.output.width)
           Rectangle { anchors.fill: parent; color: Color.background }
+          Image {
+            anchors.centerIn: parent
+            width: Math.min(24, parent.width * 0.5, parent.height * 0.5)
+            height: width
+            source: tile.manager.iconFor(modelData)
+            sourceSize: Qt.size(64, 64)
+            asynchronous: true
+            opacity: 1 - preview.opacity
+          }
           CapturedPreview {
+            id: preview
             anchors.fill: parent
-            scheduler: tile.manager.captureScheduler
+            cache: tile.captureCache
             toplevel: modelData
             capturing: tile.capturing
             refreshInterval: 1000

@@ -55,7 +55,7 @@ Your existing workspaces become Desktop 1 without moving their windows. Each mon
 
 The manager opens on every monitor at once. Each monitor has a left sidebar with one live thumbnail per desktop, showing that desktop's currently selected workspace on that monitor. The main Exposé area shows only windows on the current desktop's selected workspace for that monitor, not every workspace or another monitor's windows.
 
-Opening prepares previews before the grid and sidebar fade in together. First frames use a bounded startup burst; subsequent updates share a capture budget of about 30 frames per second across all monitors. Window cards refresh up to five times per second, sidebar thumbnails once per second, and an enlarged Space preview targets 15 frames per second when budget is available. With many windows, each preview updates less often. Movement and selection animations run independently; dragging pauses capture while retaining the last frames.
+Opening prepares and renders previews before the grid and sidebar fade in together. Each window shares one capture between its card and sidebar thumbnail. Both retain their contents through the closing animation, so a quick reopen can reuse them immediately. First frames use a bounded startup burst; subsequent updates share a capture budget of about 30 frames per second across all monitors. Window cards refresh up to five times per second, sidebar thumbnails once per second, and an enlarged Space preview targets 15 frames per second when budget is available. With many windows, each preview updates less often. Movement and selection animations run independently; dragging pauses capture while retaining the last frames. A source that misses the 500 ms opening deadline keeps an application-icon fallback until the next opening, so it cannot pop into an already revealed thumbnail.
 
 Click a desktop thumbnail to switch all monitors together while keeping the manager open. Click a window to activate it and close the manager everywhere. Drag a window card onto another monitor’s window area to move it there, or onto a desktop thumbnail on any monitor to send it to that desktop’s selected workspace without following it. Escape cancels a drag. Hold a drag near a sidebar's top or bottom edge to scroll. Double-click a desktop's name to rename it. **New desktop** or `Ctrl + N` creates and selects a desktop.
 
@@ -78,7 +78,7 @@ The overview follows the active Omarchy theme, including menu colors and transpa
 
 Edit this checkout directly. After QML changes, run `omarchy restart shell`. After Lua changes, run `hyprctl reload` and check `hyprctl configerrors`. Keep the normal session `OMARCHY_PATH`; it still points to Omarchy, not this plugin.
 
-Run the independent controller, keybinding-inspection, workspace-scoping, Exposé composition, capture-scheduling, JavaScript model, and packaging tests with Bash, Lua, and Node.js:
+Run the controller, keybinding-inspection, workspace-scoping, Exposé composition, capture-scheduling, JavaScript model, and packaging tests with Bash, Lua, and Node.js. When Quickshell is installed, the suite also runs an offscreen QML test for shared-capture ownership and fallback lifetime:
 
 ```bash
 ./test/run

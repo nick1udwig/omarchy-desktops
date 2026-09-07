@@ -80,7 +80,7 @@ Item {
                 Desktops.CapturedPreview {
                     id: livePreview
                     anchors.fill: parent
-                    scheduler: card.controller.manager.captureScheduler
+                    cache: card.controller.captureCache
                     toplevel: card.modelData
                     capturing: card.controller.opened && card.inLayout
                     refreshInterval: card.previewed ? 66 : 200

@@ -12,12 +12,17 @@ Item {
   property double startedAt: 0
   property int preparationMs: 0
   property int missingAtReveal: 0
-  onActiveChanged: if (!active && preparing) { preparing = false; ready = false }
+  onActiveChanged: {
+    if (!active && preparing) { preparing = false; ready = false }
+    else prime()
+  }
 
   function begin() {
+    startedAt = Date.now()
+    // A toggle during the close animation can reverse the fade immediately.
+    if (queue.cached()) { preparationMs = 0; missingAtReveal = 0; preparing = false; ready = true; return }
     preparing = true
     ready = false
-    startedAt = Date.now()
   }
   function reveal() {
     missingAtReveal = queue.pending()
@@ -26,7 +31,10 @@ Item {
     ready = true
   }
 
-  function registerView(view) { queue.add(view); viewCount = queue.entries.length }
+  function prime() {
+    if (active && preparing) requests += queue.prepare(Date.now(), 32)
+  }
+  function registerView(view) { queue.add(view); viewCount = queue.entries.length; prime() }
   function unregisterView(view) { queue.remove(view); viewCount = queue.entries.length }
 
   Timer {
@@ -44,7 +52,7 @@ Item {
     running: root.active && root.preparing
     onTriggered: {
       var now = Date.now()
-      root.requests += root.queue.prepare(now, 16)
+      root.requests += root.queue.prepare(now, 32)
       // Use elapsed wall time: animation timers can advance unevenly while
       // several output surfaces map. A slow source cannot block interaction.
       if (root.queue.pending() === 0 || now - root.startedAt >= 500) root.reveal()

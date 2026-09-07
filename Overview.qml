@@ -17,7 +17,7 @@ Item {
   property string draggedWindow: ""
   readonly property string dragMimeType: "application/x-omarchy-window"
   property var pendingDrop: null
-  property int wallpaperRevision: 0
+  property string wallpaperRevision: ""
   property var panels: ({})
   property var iconCache: ({})
   readonly property alias captureScheduler: captures
@@ -32,7 +32,7 @@ Item {
     draggedWindow = ""
     keyboardOutput = DesktopState.focusedMonitor || (Quickshell.screens[0] ? Quickshell.screens[0].name : "")
     DesktopState.error = ""
-    wallpaperRevision++
+    wallpaperStamp.running = true
     Hyprland.refreshToplevels()
     captures.begin()
     opened = true
@@ -126,6 +126,17 @@ Item {
     id: captures
     active: root.opened && root.draggedWindow === ""
     onReadyChanged: if (ready && root.opened) Qt.callLater(function() { root.focusOutput(root.keyboardOutput) })
+  }
+
+  // Reopening usually uses the same wallpaper. Reuse its decoded image and
+  // GPU texture; invalidate only when the target file actually changes.
+  Process {
+    id: wallpaperStamp
+    command: ["stat", "-Lc", "%d:%i:%s:%y", root.stateHome + "/omarchy/current/background"]
+    running: true
+    stdout: StdioCollector {
+      onStreamFinished: if (text.trim()) root.wallpaperRevision = Qt.md5(text.trim())
+    }
   }
 
   Connections {

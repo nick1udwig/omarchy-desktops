@@ -36,7 +36,7 @@ Live checks confirmed captured content on every grid card, shared request pacing
 
 To inspect a running session, use `omarchy-shell desktops-overview status`. Its `captures` object reports `active`, `views`, and cumulative `requests`. Compare request counts over a known interval with the overview open and then closed. Requests can be no-ops when Quickshell already has a capture pending for compositor damage; the counter measures scheduled calls, not completed frames.
 
-The remaining fixed cost is exporting native-size buffers. Sharing one exported buffer between a grid card and its sidebar copy could reduce this further, but requires additional texture ownership across surfaces or support in the capture backend. The scheduler bounds the current implementation's work without that dependency.
+The remaining fixed cost was exporting native-size buffers independently for each view. The later shared-texture pass below removes the duplicate export within each output, while keeping separate ownership for different output surfaces.
 
 ## Layout and maintenance pass, 2026-09-05
 
@@ -76,3 +76,18 @@ A stress fixture with too many tiled windows produced invalid zero-sized surface
 Final native pointer checks passed for a same-monitor desktop drop, a drop into the laptop monitor’s grid, and a desktop drop on the portrait monitor. Completion was observed 70–73 ms after release, including test polling overhead. Escape left the window in place (and closed the overview in this Hyprland session); clicking activated the selected card. All temporary windows were closed and the original focus and cursor restored.
 
 A 60 fps recording of three additional openings, with 26 cards and 52 captures, was inspected for the coherent grid/sidebar fade. All previews were present at reveal (328, 203, and 196 ms while recording). An actual QML timer fixture prepared 60 simulated 16 ms frames in 105 ms and released all views; a stalled fixture revealed at 506 ms instead of waiting indefinitely. Invalid-size checks issued no captures. Reopening during the close animation also retained complete previews, and closing left zero registered captures. All 179 standalone checks and plugin validation pass. Private recordings and window metadata are not committed.
+
+
+## Painted sidebar frames and shared captures, 2026-09-06
+
+Further inspection found two gaps in the previous reveal gate. A native buffer could report `hasContent` before Qt drew its texture, and zero-opacity ancestors prevented that preparation from completing. Separately, closing immediately cleared the sidebar's models and captures even though the rail was still fading, exposing wallpaper-only thumbnails. A recording showed this closing flash clearly.
+
+Each output now owns one capture per window. Both its card and sidebar copy sample the same rendered texture, using Qt's built-in texture shader. Producers render outside the viewport without inheriting the UI opacity; readiness waits for the texture update to complete. The sidebar retains its models and captures through the closing animation. Reopening during that animation can reverse the fade immediately. Cache eviction is deferred through a UI update so moving between consumers on the same output preserves the frame.
+
+The opening batch now permits 32 outstanding unique sources. Sources start immediately when their consumers attach. Reopening also reuses the wallpaper decode unless its file stamp changed. If a source misses the 500 ms deadline, its icon fallback remains fixed for that opening rather than being replaced after reveal. The shared fade takes 60–100 ms according to preparation time.
+
+With twenty disposable animated windows, 26 sources served 52 placements. Three instrumented openings took 208, 152, and 149 ms to prepare rendered textures, with zero missing sources. The first run was after a shell restart. Repeated openings previously took about 190–245 ms while only checking buffer availability; the new check includes rendering. These are short live-session measurements, not guaranteed latency or GPU/CPU benchmarks.
+
+A separate 60 fps recording spread probe windows across three desktops and monitors. With 30 sources serving 57 placements, all visible sidebar windows had a matching delegate and painted source at reveal; preparation took 306, 158, and 171 ms while recording. Frame inspection confirmed populated thumbnails during opening and retained contents during closing, replacing the previously observed wallpaper-only closing frame. The recording and temporary window metadata remain outside the repository.
+
+Final live interaction checks passed for Quick Look resizing, retaining every sidebar preview through closing, and reopening during the fade with 0 ms preparation. Native drops to another desktop on the same monitor, another monitor's grid, and another monitor's desktop all completed in 70–73 ms including polling overhead. Escape cancellation, click activation, and closing a captured window also passed. Closing the overview released every capture; the test windows were removed and focus and cursor restored. The full test suite and plugin validation pass, with no compositor configuration errors or recent shell runtime errors.

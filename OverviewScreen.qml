@@ -44,10 +44,11 @@ PanelWindow { // qmllint disable uncreatable-type
   readonly property real sidebarWidth: Math.min(Style.space(238), width * 0.23)
   property bool registered: false
   property bool focusPrimed: false
+  readonly property alias captureCache: captureCache
   property real contentOpacity: opened && manager.captureScheduler.ready ? 1 : 0
   Behavior on contentOpacity {
     enabled: !surface.manager.captureScheduler.preparing
-    NumberAnimation { duration: 100 }
+    NumberAnimation { duration: Math.max(60, Math.min(100, 190 - surface.manager.captureScheduler.preparationMs)) }
   }
 
   screen: null
@@ -82,6 +83,7 @@ PanelWindow { // qmllint disable uncreatable-type
       previewIndex = -1
       previewExitIndex = -1
       sidebar.positionViewAtIndex(DesktopState.current - 1, ListView.Contain)
+      sidebar.forceLayout()
       if (acceptsKeyboard) Qt.callLater(focusSearch)
     }
   }
@@ -150,6 +152,7 @@ PanelWindow { // qmllint disable uncreatable-type
         result.push({ kind: item.objectName, output: surface.outputName,
           x: point.x + surface.output.x, y: point.y + surface.output.y, width: item.width, height: item.height,
           window: item.windowAddress || "", preview: item.hasPreview || false,
+          thumbnail: typeof item.previewStatus === "function" ? item.previewStatus() : null,
           workspace: item.workspaceId || 0, desktop: item.desktopId || DesktopState.current, slot: item.slotNumber || (surface.workspace ? surface.workspace.slot : 0),
           radius: item.previewRadius !== undefined ? item.previewRadius : item.radius || 0 })
       }
@@ -175,12 +178,18 @@ PanelWindow { // qmllint disable uncreatable-type
     function onCurrentChanged() { sidebar.positionViewAtIndex(DesktopState.current - 1, ListView.Contain) }
   }
 
+  // Producers sit outside the viewport and must not inherit the UI's fade.
+  CaptureCache {
+    id: captureCache
+    scheduler: surface.manager.captureScheduler
+    pixelRatio: surface.screen ? surface.screen.devicePixelRatio : 1
+  }
+
   Item {
     id: content
     anchors.fill: parent
     opacity: surface.progress
     enabled: surface.opened
-
     Rectangle { anchors.fill: parent; color: Color.background }
     Image {
       id: wallpaper
@@ -237,8 +246,10 @@ PanelWindow { // qmllint disable uncreatable-type
             width: sidebar.width
             desktopId: index + 1
             manager: surface.manager
+            captureCache: surface.captureCache
             output: surface.output
-            capturing: surface.opened && y + height >= sidebar.contentY && y <= sidebar.contentY + sidebar.height
+            presented: surface.visible && y + height >= sidebar.contentY && y <= sidebar.contentY + sidebar.height
+            capturing: surface.opened && presented
           }
         }
         BorderSurface {
