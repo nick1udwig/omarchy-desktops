@@ -14,6 +14,26 @@ function createQueue() {
       if (index < this.cursor) this.cursor--
       if (this.cursor >= this.entries.length) this.cursor = 0
     },
+    pending: function() {
+      return this.entries.filter(function(entry) {
+        return entry.view.captureEnabled && !entry.view.hasContent
+      }).length
+    },
+    prepare: function(now, maxInFlight) {
+      var inFlight = this.entries.filter(function(entry) {
+        return entry.view.captureEnabled && entry.view.captureStarted && !entry.view.hasContent
+      }).length
+      var requests = 0
+      for (var i = 0; i < this.entries.length && inFlight < maxInFlight; i++) {
+        var entry = this.entries[i], view = entry.view
+        if (!view.captureEnabled || view.hasContent || view.captureStarted) continue
+        if (!view.refresh()) continue
+        entry.due = now + view.refreshInterval
+        requests++
+        inFlight++
+      }
+      return requests
+    },
     tick: function(now) {
       var count = this.entries.length
       for (var i = 0; i < count; i++) {

@@ -41,6 +41,12 @@ assertEqual(model.windowsFor(snapshot,1,'left',tops,'').length, 0, 'closing a wi
 tops[1].lastIpcObject.mapped = true
 assert(model.sameWindows(tops,tops.slice()), 'metadata updates keep stable card instances')
 assert(!model.sameWindows(tops,tops.slice().reverse()), 'a changed card order is detected')
+assertDeepEqual(model.dropTarget(snapshot,tops[1],1,'right'), {address:'b',desktop:1,output:'right',slot:1}, 'dropping on another monitor uses its selected workspace')
+assertDeepEqual(model.dropTarget(snapshot,tops[1],2,'right'), {address:'b',desktop:2,output:'right',slot:2}, 'a cross-monitor desktop drop uses the destination remembered slot')
+assertEqual(model.dropTarget(snapshot,tops[1],1,'left'),null,'dropping back on the same workspace is not presented as a move')
+assertEqual(model.dropTarget(snapshot,tops[1],2,'removed'),null,'disconnected drop destinations are rejected')
+assertEqual(model.dropTarget(snapshot,null,2,'right'),null,'a closed drag source cannot move a different window')
+assertEqual(model.dropTarget(snapshot,pinned,2,'right'),null,'pinned windows are not offered invalid desktop drops')
 
 for (const size of [[1100,740],[940,2100],[700,560],[300,240]]) {
   for (const count of [0,1,2,3,6,12,20]) {

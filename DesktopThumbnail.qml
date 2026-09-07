@@ -49,7 +49,7 @@ BorderSurface {
       height: Math.min(parent.height, parent.width * tile.output.height / Math.max(1, tile.output.width))
       radius: tile.previewRadius
       Rectangle { anchors.fill: parent; color: Color.background }
-      Image { anchors.fill: parent; source: tile.manager.wallpaper; fillMode: Image.PreserveAspectCrop }
+      Image { anchors.fill: parent; source: tile.manager.wallpaper; sourceSize: Qt.size(1280, 1280); fillMode: Image.PreserveAspectCrop }
       Repeater {
         model: tile.capturing ? tile.windows : []
         delegate: PreviewClip {
@@ -64,7 +64,7 @@ BorderSurface {
           CapturedPreview {
             anchors.fill: parent
             scheduler: tile.manager.captureScheduler
-            source: modelData.wayland
+            toplevel: modelData
             capturing: tile.capturing
             refreshInterval: 1000
           }
@@ -144,14 +144,11 @@ BorderSurface {
     }
   }
 
-  DropArea {
+  WindowDropArea {
     id: drop
     anchors.fill: parent
-    keys: ["omarchy-window"]
-    onDropped: function(event) {
-      if (!tile.workspace || !event.source || !event.source.windowAddress) return
-      DesktopState.move(event.source.windowAddress, tile.desktopId, tile.output.name, tile.slotNumber)
-      event.acceptProposedAction()
-    }
+    manager: tile.manager
+    desktopId: tile.desktopId
+    outputName: tile.output.name
   }
 }

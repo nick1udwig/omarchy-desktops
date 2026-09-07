@@ -56,4 +56,31 @@ assertEqual(b.requests, 1, 'closing a previously serviced window does not skip i
 churn.remove(c)
 churn.tick(2)
 assertEqual(b.requests, 2, 'closing the next window safely wraps the cursor')
+
+const startup = scheduler.createQueue()
+let clock = 0
+const fresh = Array.from({length:60}, () => ({
+  ...view(), hasContent:false, captureStarted:false, startedAt:0,
+  refresh() { this.requests++; this.captureStarted=true; this.startedAt=clock; return true }
+}))
+fresh.forEach(v => startup.add(v))
+assertEqual(startup.prepare(0,16),16,'startup fills only its bounded concurrency budget')
+assertEqual(startup.prepare(0,16),0,'sixteen pending exports prevent an unbounded startup burst')
+for (clock=8; clock<=160; clock+=8) {
+  fresh.forEach(v => { if (v.captureStarted && clock-v.startedAt>=16) v.hasContent=true })
+  const issued=startup.prepare(clock,16)
+  assert(issued<=16 && fresh.filter(v=>v.captureStarted&&!v.hasContent).length<=16, 'startup stays bounded while frames complete')
+  if (!startup.pending()) break
+}
+assertEqual(startup.pending(),0,'60 previews with 16ms exports become ready inside the opening animation')
+assert(fresh.every(v=>v.requests===1),'startup requests each first frame exactly once without live refresh work')
+assertEqual(startup.prepare(clock,16),0,'completed startup never refreshes existing content')
+const stalled=scheduler.createQueue()
+const blocked={...view(),captureStarted:true,hasContent:false}
+stalled.add(blocked)
+assertEqual(stalled.pending(),1,'an unfinished frame delays the coherent reveal')
+blocked.captureEnabled=false
+assertEqual(stalled.pending(),0,'a stopped or hidden source cannot hold up the reveal')
+stalled.remove(blocked)
+assertEqual(stalled.prepare(0,16),0,'closing releases startup work as well as periodic updates')
 JS

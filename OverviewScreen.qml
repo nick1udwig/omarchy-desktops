@@ -44,6 +44,11 @@ PanelWindow { // qmllint disable uncreatable-type
   readonly property real sidebarWidth: Math.min(Style.space(238), width * 0.23)
   property bool registered: false
   property bool focusPrimed: false
+  property real contentOpacity: opened && manager.captureScheduler.ready ? 1 : 0
+  Behavior on contentOpacity {
+    enabled: !surface.manager.captureScheduler.preparing
+    NumberAnimation { duration: 100 }
+  }
 
   screen: null
   visible: opened || progress > 0
@@ -101,7 +106,10 @@ PanelWindow { // qmllint disable uncreatable-type
   }
   function takeKeyboard() { if (manager.keyboardOutput !== outputName) manager.focusOutput(outputName) }
   function activate(top) { if (top) manager.focusWindow(top.address) }
-  function trackDrag(item, x, y) { dragY = item.mapToItem(sidebar, x, y).y }
+  function trackDrag(item, x, y) {
+    var point = item.mapToItem(sidebar, x, y)
+    dragY = point.x >= 0 && point.x <= sidebar.width ? point.y : -1
+  }
   function togglePreview() {
     if (previewIndex >= 0) { previewExitIndex = previewIndex; previewIndex = -1; previewExit.restart() }
     else if (screenToplevels.length) { previewExitIndex = -1; previewIndex = selectedIndex }
@@ -109,7 +117,7 @@ PanelWindow { // qmllint disable uncreatable-type
 
   function handleKey(event) {
     if (event.key === Qt.Key_Escape) {
-      if (manager.draggedWindow) manager.draggedWindow = ""
+      if (manager.draggedWindow) manager.finishDrag(manager.draggedWindow, false)
       else if (previewIndex >= 0) togglePreview()
       else if (manager.filterText) manager.filterText = ""
       else manager.close()
@@ -156,7 +164,7 @@ PanelWindow { // qmllint disable uncreatable-type
   Timer {
     interval: 30
     repeat: true
-    running: surface.opened && surface.manager.draggedWindow !== ""
+    running: surface.opened && surface.manager.draggedWindow !== "" && surface.dragY >= 0
     onTriggered: {
       var direction = surface.dragY < Style.space(45) ? -1 : surface.dragY > sidebar.height - Style.space(45) ? 1 : 0
       sidebar.contentY = Math.max(sidebar.originY, Math.min(Math.max(sidebar.originY, sidebar.contentHeight - sidebar.height), sidebar.contentY + direction * Style.space(9)))
@@ -178,6 +186,9 @@ PanelWindow { // qmllint disable uncreatable-type
       id: wallpaper
       anchors.fill: parent
       source: surface.manager.wallpaper
+      // The background is blurred; decoding a full-resolution wallpaper only
+      // delays the first frame without adding visible detail.
+      sourceSize: Qt.size(1280, 1280)
       fillMode: Image.PreserveAspectCrop
       visible: false
     }
@@ -193,6 +204,8 @@ PanelWindow { // qmllint disable uncreatable-type
 
     BorderSurface {
       id: rail
+      opacity: surface.contentOpacity
+      enabled: surface.manager.captureScheduler.ready
       anchors { top: parent.top; bottom: parent.bottom; left: parent.left; margins: Style.space(18) }
       width: surface.sidebarWidth
       radius: Style.cornerRadius
@@ -241,6 +254,8 @@ PanelWindow { // qmllint disable uncreatable-type
     }
 
     ColumnLayout {
+      opacity: surface.contentOpacity
+      enabled: surface.manager.captureScheduler.ready
       anchors { top: parent.top; bottom: parent.bottom; left: rail.right; right: parent.right; topMargin: Style.space(36); bottomMargin: Style.space(25); leftMargin: Style.space(30); rightMargin: Style.space(36) }
       spacing: Style.space(20)
 
@@ -349,6 +364,13 @@ PanelWindow { // qmllint disable uncreatable-type
             else surface.manager.close()
           }
         }
+        WindowDropArea {
+          id: gridDrop
+          anchors.fill: parent
+          manager: surface.manager
+          desktopId: DesktopState.current
+          outputName: surface.outputName
+        }
         Repeater {
           model: surface.visible ? surface.cardToplevels : []
           delegate: ExposeCard {
@@ -359,8 +381,15 @@ PanelWindow { // qmllint disable uncreatable-type
             windowLayout: grid.windowLayout
             layoutAreaWidth: grid.width
             layoutAreaHeight: grid.height
-            dragLayer: dragSurface
           }
+        }
+        BorderSurface {
+          anchors.fill: parent
+          visible: gridDrop.containsDrag
+          z: 20
+          radius: Style.cornerRadius
+          color: "transparent"
+          borderSpec: Border.hyprlandActiveSpec(Color.menu.selectedText, Style.focusBorderWidth)
         }
         Column {
           anchors.centerIn: parent
@@ -374,7 +403,7 @@ PanelWindow { // qmllint disable uncreatable-type
 
       Text {
         Layout.fillWidth: true
-        text: "↑ ↓ ← →  Select     Space  Preview     Enter  Open     Tab  Monitor     Esc  Close\nDrag a window to a desktop on the left."
+        text: "↑ ↓ ← →  Select     Space  Preview     Enter  Open     Tab  Monitor     Esc  Close\nDrag to another monitor’s window area or to a desktop in its sidebar."
         color: Color.menu.text
         opacity: 0.65
         font.family: Style.font.menuFamily
@@ -384,6 +413,5 @@ PanelWindow { // qmllint disable uncreatable-type
         wrapMode: Text.WordWrap
       }
     }
-    Item { id: dragSurface; anchors.fill: parent; z: 100 }
   }
 }

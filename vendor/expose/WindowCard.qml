@@ -68,17 +68,20 @@ Item {
                 radius: card.previewRadius
 
                 Rectangle { anchors.fill: parent; color: Color.background }
-                CardText {
+                Image {
                     anchors.centerIn: parent
-                    text: "Live preview unavailable"
-                    visible: !livePreview.hasContent
-                    opacity: 0.45
+                    width: Math.min(Style.space(64), parent.width * 0.3)
+                    height: width
+                    source: card.controller.manager.iconFor(card.modelData)
+                    sourceSize: Qt.size(64, 64)
+                    asynchronous: true
+                    opacity: 1 - livePreview.opacity
                 }
                 Desktops.CapturedPreview {
                     id: livePreview
                     anchors.fill: parent
                     scheduler: card.controller.manager.captureScheduler
-                    source: WindowModel.waylandFor(card.modelData)
+                    toplevel: card.modelData
                     capturing: card.controller.opened && card.inLayout
                     refreshInterval: card.previewed ? 66 : 200
                 }
@@ -103,6 +106,7 @@ Item {
                 Layout.preferredWidth: Style.space(30)
                 Layout.preferredHeight: Style.space(30)
                 source: card.controller.manager.iconFor(card.modelData)
+                sourceSize: Qt.size(64, 64)
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
             }

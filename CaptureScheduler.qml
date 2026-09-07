@@ -7,6 +7,24 @@ Item {
   readonly property var queue: Scheduler.createQueue()
   property int viewCount: 0
   property int requests: 0
+  property bool preparing: false
+  property bool ready: false
+  property double startedAt: 0
+  property int preparationMs: 0
+  property int missingAtReveal: 0
+  onActiveChanged: if (!active && preparing) { preparing = false; ready = false }
+
+  function begin() {
+    preparing = true
+    ready = false
+    startedAt = Date.now()
+  }
+  function reveal() {
+    missingAtReveal = queue.pending()
+    preparationMs = Date.now() - startedAt
+    preparing = false
+    ready = true
+  }
 
   function registerView(view) { queue.add(view); viewCount = queue.entries.length }
   function unregisterView(view) { queue.remove(view); viewCount = queue.entries.length }
@@ -15,7 +33,21 @@ Item {
     // At most one full-window export per tick, about 30/s in total.
     interval: 33
     repeat: true
-    running: root.active && root.viewCount > 0
+    running: root.active && !root.preparing && root.viewCount > 0
     onTriggered: if (root.queue.tick(Date.now())) root.requests++
+  }
+  Timer {
+    // First frames should fit inside the opening animation. Limit both the
+    // work issued per turn and outstanding exports; steady updates stay cheap.
+    interval: 8
+    repeat: true
+    running: root.active && root.preparing
+    onTriggered: {
+      var now = Date.now()
+      root.requests += root.queue.prepare(now, 16)
+      // Use elapsed wall time: animation timers can advance unevenly while
+      // several output surfaces map. A slow source cannot block interaction.
+      if (root.queue.pending() === 0 || now - root.startedAt >= 500) root.reveal()
+    }
   }
 }

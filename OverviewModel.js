@@ -24,6 +24,14 @@ function sameWindows(left, right) {
   return left.length === right.length && left.every(function(top, i) { return top === right[i] })
 }
 
+function dropTarget(snapshot, top, desktop, output) {
+  var workspace = selectedWorkspace(snapshot, desktop, output)
+  if (!workspace || !top || !WindowModel.isEligible(top)
+      || (top.lastIpcObject && top.lastIpcObject.pinned)
+      || (top.workspace && top.workspace.id === workspace.id)) return null
+  return { address: String(top.address), desktop: desktop, output: output, slot: workspace.slot }
+}
+
 // Spatial selection follows upstream Exposé's nearest-neighbor scoring.
 function directionalIndex(layout, selected, dx, dy) {
   var current = layout[selected]

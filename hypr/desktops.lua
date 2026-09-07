@@ -77,6 +77,7 @@ if previous then
     state = saved
   end
 end
+state.disconnected = state.disconnected or {}
 
 local function monitors()
   local result = {}
@@ -113,6 +114,16 @@ local function vacant_slot(entry)
     if not hl.get_workspace(tostring(id)) then return slot end
   end
   return #entry.slots + 1
+end
+
+local function disconnected_slot(id)
+  for _, desktops in pairs(state.disconnected) do
+    for _, entry in ipairs(desktops) do
+      for slot, saved_id in ipairs(entry.slots) do
+        if saved_id == id then return entry, slot end
+      end
+    end
+  end
 end
 
 local function pin_workspace(id, output)
@@ -335,10 +346,18 @@ local function recover_outputs()
   end
   table.sort(removed)
   for _, output in ipairs(removed) do
-    for _, desktop in ipairs(state.desktops) do
+    state.disconnected[output] = {}
+    for desktop_id, desktop in ipairs(state.desktops) do
       local source, target = desktop.outputs[output], desktop.outputs[fallback]
       if source then
-        for _, id in ipairs(source.slots) do
+        -- Keep the original slots and selection across transient disconnects,
+        -- including an external display dropping its link during resume.
+        local saved = { slots = {}, selected = source.selected, previous = source.previous }
+        state.disconnected[output][desktop_id] = saved
+        for slot, id in ipairs(source.slots) do
+          -- An earlier disconnect may have put another output's workspaces
+          -- here. Only its original output should reclaim them.
+          saved.slots[slot] = disconnected_slot(id) and allocate() or id
           if hl.get_workspace(tostring(id)) then
             target.slots[vacant_slot(target)] = id
             pin_workspace(id, fallback)
@@ -352,11 +371,34 @@ local function recover_outputs()
   end
 end
 
+local function restore_output(output)
+  local saved = state.disconnected[output]
+  if not saved then return end
+  for desktop_id, entry in ipairs(saved) do
+    for _, id in ipairs(entry.slots) do
+      local owner, current_output, slot = locate(id)
+      if owner then
+        state.desktops[owner].outputs[current_output].slots[slot] = allocate()
+      end
+      pin_workspace(id, output)
+      if hl.get_workspace(tostring(id)) then
+        hl.dispatch(hl.dsp.workspace.move({ workspace = tostring(id), monitor = output }))
+      end
+    end
+    state.desktops[desktop_id].outputs[output] = entry
+  end
+  state.outputs[output] = true
+  state.disconnected[output] = nil
+  return true
+end
+
 -- Incorporate pre-existing workspaces without changing their IDs. New outputs
 -- adopt unowned workspaces into the current desktop and get local slot numbers.
 local function initialize()
+  local restored = {}
   if #state.desktops == 0 then create() end
   for _, monitor in ipairs(monitors()) do
+    restored[monitor.name] = restore_output(monitor.name)
     local first = not state.outputs[monitor.name]
     if first then
       local slots = {}
@@ -381,7 +423,7 @@ local function initialize()
     if workspace.id > 0 and not locate(workspace) and workspace.monitor and hl.get_monitor(workspace.monitor.name) then
       local entry = state.desktops[state.current].outputs[workspace.monitor.name]
       entry.slots[#entry.slots + 1] = workspace.id
-      if workspace.monitor.active_workspace.id == workspace.id then entry.selected = #entry.slots end
+      if not restored[workspace.monitor.name] and workspace.monitor.active_workspace.id == workspace.id then entry.selected = #entry.slots end
     end
   end
 end
@@ -391,6 +433,9 @@ local function workspace_relocated(workspace, monitor)
   local desktop_id, output, slot = locate(workspace)
   if not desktop_id or output == monitor.name or not hl.get_monitor(output) then return end
   transaction(function()
+    -- An explicit workspace move supersedes its pre-disconnect destination.
+    local saved, saved_slot = disconnected_slot(workspace.id)
+    if saved then saved.slots[saved_slot] = allocate() end
     remember()
     local focused = hl.get_active_monitor()
     ensure_output(monitor.name)

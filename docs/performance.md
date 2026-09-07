@@ -12,7 +12,7 @@ The overview also invalidated every window list on every raw compositor event an
 
 ## Changes
 
-- All previews share one round-robin scheduler, issuing at most one request per 33 ms tick across all monitors. First frames use the same budget, avoiding a burst of exports when opening.
+- All previews share one round-robin scheduler, issuing at most one request per 33 ms tick across all monitors. The initial implementation used this same budget for first frames; the startup path was subsequently separated as described below.
 - Cards request updates every 200 ms, sidebar previews every 1000 ms, and Quick Look every 66 ms. These are maximum requested rates; the shared budget lowers individual rates when more windows compete. Animation timing remains independent of capture timing.
 - Dragging and closing pause capture. Filtered cards retain their last frame without requesting more; offscreen sidebar delegates release their captures. Closed surfaces release all capture delegates.
 - Only windows in the current workspace get grid delegates. Other desktops' visible sidebar previews still work.
@@ -57,3 +57,22 @@ The same pass removes the unused `WorkspaceTile.qml` / `WindowPreview.qml` imple
 The standalone suite and manifest validation pass. Isolated Quickshell checks compiled all overview components, instantiated the card in a hidden window, verified Quick Look geometry and filtering, and confirmed that 100 duplicate snapshots cause no state updates. After reloading in an unlocked session, live checks verified capture content on all three monitors, a shared budget of 31 scheduled requests over one second, search and title updates, Quick Look, desktop moves, capture cleanup, and square/rounded rendering. Pointer checks verified drag cancellation and geometry restoration, zero capture requests during a held drag, dropping onto another desktop’s remembered workspace, and clicking the moved card to activate it. Test windows were closed and the original desktop, focus, cursor position, and rounding restored.
 
 Live testing also exposed a focus problem: keeping one monitor’s layer surface in exclusive keyboard mode prevented pointer events from reaching the other monitors. The selected surface now acquires exclusive focus briefly after mapping and releases it to on-demand mode, following Omarchy’s existing panel behavior. Other surfaces request no keyboard focus until the user selects them. Repeated live checks verified typing without a preliminary click, Tab through all three monitors, search-field clicks on each monitor, and reopening during the close animation.
+
+
+## Coherent opening and native dragging, 2026-09-06
+
+The previous steady refresh limit also serialized first frames. For example, 20 grid cards and their sidebar copies needed at least 1.32 seconds just to schedule 40 exports, while the opening animation lasted 190 ms. The unready card text and empty sidebar were already visible during that interval.
+
+Startup now fills a shared budget of at most sixteen outstanding first-frame exports, replenished by an 8 ms timer as frames complete. Qt can coalesce these ticks to the display cadence. Existing content is not refreshed during preparation. The sidebar and grid stay transparent until the enabled previews have content, then fade together over 100 ms. The wallpaper animation starts immediately. A 500 ms wall-clock deadline prevents an unresponsive source from blocking the overview; late frames crossfade over a quiet application-icon fallback. Steady refresh limits remain unchanged.
+
+The standalone scheduler tests model 60 previews with 16 ms export latency and verify readiness within the opening animation, bounded concurrency, no duplicate first requests, and stopped/hidden sources releasing the readiness gate. This is a scheduling simulation, not a measurement of compositor or GPU latency.
+
+Window movement now uses native drag-and-drop with a 190-pixel-wide static card image. It crosses Wayland surfaces, unlike the previous internal QML drag. Window areas target the destination monitor’s current workspace, and sidebar items target that monitor and desktop’s remembered workspace. Destination validation and deferred movement are shared, and invalid or cancelled drops leave window membership unchanged.
+
+On the same three-monitor session, twenty disposable animated 800×600 windows produced 25 grid cards and 50 total captures. Three openings prepared every enabled preview in 245, 190, and 205 ms respectively, with zero missing frames at reveal; the shared fade adds 100 ms. These are first-frame readiness measurements, not frame presentation timestamps or a guarantee of 190 ms total opening time. The blurred background and sidebar share a wallpaper decode capped at 1280×1280. Steady capture pacing is unchanged.
+
+A stress fixture with too many tiled windows produced invalid zero-sized surfaces and a Wayland protocol disconnect. Previews now skip invalid or not-yet-known window sizes and release their capture source when dimensions become invalid. The valid-size benchmark used temporary floating probe windows. This guard cannot eliminate a compositor/backend race after the metadata check.
+
+Final native pointer checks passed for a same-monitor desktop drop, a drop into the laptop monitor’s grid, and a desktop drop on the portrait monitor. Completion was observed 70–73 ms after release, including test polling overhead. Escape left the window in place (and closed the overview in this Hyprland session); clicking activated the selected card. All temporary windows were closed and the original focus and cursor restored.
+
+A 60 fps recording of three additional openings, with 26 cards and 52 captures, was inspected for the coherent grid/sidebar fade. All previews were present at reveal (328, 203, and 196 ms while recording). An actual QML timer fixture prepared 60 simulated 16 ms frames in 105 ms and released all views; a stalled fixture revealed at 506 ms instead of waiting indefinitely. Invalid-size checks issued no captures. Reopening during the close animation also retained complete previews, and closing left zero registered captures. All 179 standalone checks and plugin validation pass. Private recordings and window metadata are not committed.

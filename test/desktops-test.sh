@@ -156,6 +156,7 @@ assert(selected(1, "left").slots[#selected(1, "left").slots] == 890, "external s
 
 -- Hyprland migrates workspaces before delivering the final output layout.
 local disconnected = displays[2]
+local before_disconnect = state()
 local recovered_id = selected(2, "right").slots[3]
 displays = { displays[1] }
 active_monitor = displays[1]
@@ -174,11 +175,21 @@ controller.switch(2)
 visible(2)
 assert(active_window.mapped, "hotplug never closes windows")
 
--- A reconnected output gets a fresh group, without stealing the recovered one.
+-- Resume can disconnect just one display. Its windows and selections must
+-- return even if Hyprland config was reloaded while that output was absent.
+controller = load_controller()
 disconnected.active_workspace = ensure_workspace(891, disconnected)
 displays[2] = disconnected
 event("monitor.layout_changed")
-assert(selected(2, "right").slots[1] == 891, "new output adopts existing workspace into the current desktop")
+for desktop_id, desktop in ipairs(before_disconnect.desktops) do
+  local before, after = desktop.outputs.right, selected(desktop_id, "right")
+  assert(after.selected == before.selected, "reconnect restores the selected workspace on each desktop")
+  for slot, id in ipairs(before.slots) do
+    assert(after.slots[slot] == id, "reconnect preserves original workspace IDs and slot numbers")
+    if workspaces[id] then assert(workspaces[id].monitor == disconnected, "existing windows return to their output") end
+  end
+end
+assert(selected(2, "right").slots[#selected(2, "right").slots] == 891, "reconnect also adopts workspaces created by Hyprland")
 visible(2)
 local assigned = {}
 for _, desktop in ipairs(state().desktops) do
@@ -248,6 +259,58 @@ assert(selected(2, "left").slots[#selected(2, "left").slots] == 892, "re-enablin
 controller.rename(2, string.rep("é", 60))
 assert(state().desktops[2].name == string.rep("é", 60), "desktop names accept Unicode characters")
 visible(2)
+-- Outputs can return in either order after a dock briefly disconnects. A
+-- workspace passing through two fallback monitors still has only one home.
+local left, right = displays[1], displays[2]
+local dock = { name = "dock", position = { x = 4000, y = 0 }, width = 1920, height = 1080, scale = 1 }
+dock.active_workspace = ensure_workspace(893, dock)
+displays[3] = dock
+event("monitor.layout_changed")
+local function unplug(monitor, fallback)
+  for i, display in ipairs(displays) do if display == monitor then table.remove(displays, i); break end end
+  active_monitor = fallback or find_monitor("left") or dock
+  for _, workspace in pairs(workspaces) do
+    if workspace.monitor == monitor then workspace.monitor = active_monitor end
+  end
+  event("monitor.layout_changed")
+end
+local function reconnect(monitor)
+  displays[#displays + 1] = monitor
+  event("monitor.layout_changed")
+end
+for _, order in ipairs({ { left, right }, { right, left } }) do
+  local before = state()
+  unplug(right)
+  unplug(left)
+  controller = load_controller()
+  reconnect(order[1])
+  reconnect(order[2])
+  local assigned = {}
+  for desktop_id, desktop in ipairs(state().desktops) do
+    for output, entry in pairs(desktop.outputs) do
+      for slot, id in ipairs(entry.slots) do
+        assert(not assigned[id], "staggered reconnect must not duplicate workspace ownership")
+        assigned[id] = true
+        if output ~= "dock" then
+          local original = before.desktops[desktop_id].outputs[output]
+          local original_id = original.slots[slot]
+          if original_id and (workspaces[original_id] or slot == original.selected) then
+            assert(id == original_id, "staggered reconnect restores occupied and selected slots")
+            if workspaces[id] then assert(workspaces[id].monitor.name == output, "staggered reconnect returns windows to their original output") end
+          end
+        end
+      end
+    end
+  end
+  visible(2)
+end
+local moved_id = right.active_workspace.id
+unplug(right, dock)
+local moved = workspaces[moved_id]
+moved.monitor = left
+event("workspace.move_to_monitor", moved, left)
+reconnect(right)
+assert(moved.monitor == left, "an intentional workspace move while undocked supersedes automatic restoration")
 print("ok - desktop isolation, restore, movement, external workspaces, reload, hotplug, disabling, and scaled output geometry")
 LUA
 

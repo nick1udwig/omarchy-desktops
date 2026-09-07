@@ -1,22 +1,32 @@
 import QtQuick
 import Quickshell.Wayland
+import "vendor/expose/WindowModel.js" as WindowModel
 
 ScreencopyView {
   id: root
   required property var scheduler
-  property var source: null
+  property var toplevel: null
+  readonly property var source: WindowModel.waylandFor(toplevel)
+  readonly property var windowSize: WindowModel.ipcFor(toplevel).size || []
+  readonly property bool validSize: windowSize[0] > 0 && windowSize[1] > 0
   property bool capturing: false
   property int refreshInterval: 200
   property bool captureStopped: false
-  readonly property bool captureEnabled: capturing && visible && Boolean(source) && !captureStopped
+  readonly property bool captureEnabled: capturing && visible && Boolean(source) && validSize && !captureStopped
+  readonly property bool captureStarted: Boolean(captureSource)
 
   // Setting a source starts a full-resolution export even with live: false.
-  // Let the shared scheduler start it, including the first frame, so opening
-  // the overview cannot launch all of its captures at once.
+  // The scheduler bounds startup concurrency separately from steady refreshes.
   captureSource: null
   live: false
   paintCursor: false
+  opacity: hasContent ? 1 : 0
+  Behavior on opacity {
+    enabled: !root.scheduler.preparing
+    NumberAnimation { duration: 100 }
+  }
   onSourceChanged: { captureSource = null; captureStopped = false }
+  onValidSizeChanged: { if (!validSize) captureSource = null; captureStopped = false }
   onStopped: captureStopped = true
 
   function refresh() {

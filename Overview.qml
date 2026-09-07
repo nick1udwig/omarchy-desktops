@@ -15,6 +15,8 @@ Item {
   property string filterText: ""
   property string keyboardOutput: ""
   property string draggedWindow: ""
+  readonly property string dragMimeType: "application/x-omarchy-window"
+  property var pendingDrop: null
   property int wallpaperRevision: 0
   property var panels: ({})
   property var iconCache: ({})
@@ -32,11 +34,36 @@ Item {
     DesktopState.error = ""
     wallpaperRevision++
     Hyprland.refreshToplevels()
+    captures.begin()
     opened = true
     Qt.callLater(function() { root.focusOutput(root.keyboardOutput) })
   }
 
-  function close() { opened = false; draggedWindow = "" }
+  function close() { opened = false; draggedWindow = ""; pendingDrop = null }
+
+  function beginDrag(address) { draggedWindow = address; pendingDrop = null }
+  function dropTarget(desktop, output) {
+    if (!opened || !draggedWindow) return null
+    var top = toplevels.find(function(w) { return w.address === root.draggedWindow })
+    return Model.dropTarget(DesktopState.snapshot, top, desktop, output)
+  }
+  function stageDrop(event, desktop, output) {
+    event.accepted = false
+    var target = dropTarget(desktop, output)
+    if (!target || event.getDataAsString(dragMimeType) !== draggedWindow) return
+    pendingDrop = target
+    event.accept(Qt.MoveAction)
+  }
+  function finishDrag(address, accepted) {
+    if (draggedWindow !== address) return
+    var target = accepted ? pendingDrop : null
+    draggedWindow = ""
+    pendingDrop = null
+    // Moving destroys the source delegate. Wait until Qt releases its grab.
+    if (target) Qt.callLater(function() {
+      DesktopState.move(target.address, target.desktop, target.output, target.slot)
+    })
+  }
 
   function registerPanel(name, panel) {
     var next = Object.assign({}, panels)
@@ -98,6 +125,7 @@ Item {
   CaptureScheduler {
     id: captures
     active: root.opened && root.draggedWindow === ""
+    onReadyChanged: if (ready && root.opened) Qt.callLater(function() { root.focusOutput(root.keyboardOutput) })
   }
 
   Connections {
@@ -111,7 +139,8 @@ Item {
       var outputs = []
       for (var name in root.panels) outputs.push(root.panels[name].status())
       return JSON.stringify({ opened: root.opened, desktop: root.selectedDesktop, filter: root.filterText, keyboardOutput: root.keyboardOutput,
-        captures: { active: captures.active, views: captures.viewCount, requests: captures.requests }, outputs: outputs })
+        captures: { active: captures.active, views: captures.viewCount, requests: captures.requests,
+          ready: captures.ready, preparationMs: captures.preparationMs, missingAtReveal: captures.missingAtReveal }, outputs: outputs })
     }
     function close(): void { root.close() }
     function geometry(): string { return JSON.stringify(root.geometry()) }
