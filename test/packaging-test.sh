@@ -7,7 +7,7 @@ run_node_test <<'JS'
 const fs = require('node:fs')
 const manifest = requireFromRoot('manifest.json')
 assertEqual(manifest.schemaVersion, 1, 'plugin uses the supported manifest schema')
-assertEqual(manifest.id, 'nick.desktops', 'plugin preserves the installed third-party identity')
+assertEqual(manifest.id, 'nick1udwig.desktops', 'plugin preserves the installed third-party identity')
 assertDeepEqual(manifest.kinds, ['overlay', 'bar-widget'], 'plugin supplies the same overlay and bar widget')
 assertEqual(manifest.keepLoaded, true, 'overview lifecycle remains unchanged')
 for (const entry of Object.values(manifest.entryPoints)) {

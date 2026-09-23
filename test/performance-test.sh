@@ -85,4 +85,10 @@ assert(!stalled.cached(), 'disabled but unpainted sources cannot take the cached
 assertEqual(stalled.pending(),0,'a stopped or hidden source cannot hold up the reveal')
 stalled.remove(blocked)
 assertEqual(stalled.prepare(0,16),0,'closing releases startup work as well as periodic updates')
+const metadata = {...view(),captureEnabled:false,awaitingMetadata:true,hasContent:false,captureStarted:false}
+stalled.add(metadata)
+assertEqual(stalled.pending(),1,'a new window awaiting IPC geometry holds the reveal instead of flashing in later')
+assertEqual(stalled.prepare(0,32),0,'unknown geometry is never passed to the capture backend')
+metadata.awaitingMetadata=false
+assertEqual(stalled.pending(),0,'a known invalid-size window can use a stable fallback')
 JS

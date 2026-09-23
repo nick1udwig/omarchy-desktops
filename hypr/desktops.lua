@@ -205,8 +205,7 @@ end
 
 -- Only the desktop being viewed may remain empty. Count all owned slots,
 -- including hidden workspaces and workspaces recovered from disconnected outputs.
-local function collapse_empty(closing_window)
-  if #monitors() == 0 then return end
+local function occupied_desktops(closing_window)
   local occupied = {}
   for _, window in ipairs(hl.get_windows()) do
     if window ~= closing_window and window.mapped and not window.pinned then
@@ -214,6 +213,12 @@ local function collapse_empty(closing_window)
       if desktop_id then occupied[desktop_id] = true end
     end
   end
+  return occupied
+end
+
+local function collapse_empty(closing_window)
+  if #monitors() == 0 then return end
+  local occupied = occupied_desktops(closing_window)
   for id = #state.desktops, 1, -1 do
     if id ~= state.current and not occupied[id] then
       table.remove(state.desktops, id)
@@ -269,8 +274,12 @@ end
 function M.step(direction)
   assert(direction == -1 or direction == 1, "Direction must be -1 or 1")
   local target = state.current + direction
-  if target < 1 then return end
-  if target > #state.desktops then create() end
+  if target < 1 then
+    target = #state.desktops
+    if occupied_desktops()[target] then target = create() end
+  elseif target > #state.desktops then
+    if occupied_desktops()[state.current] then create() else target = 1 end
+  end
   M.switch(target)
 end
 
@@ -577,6 +586,11 @@ bind("CTRL + SUPER + UP", "Previous desktop", function() M.step(-1) end)
 bind("CTRL + SUPER + DOWN", "Next desktop", function() M.step(1) end)
 bind("CTRL + SHIFT + SUPER + UP", "Move window to previous desktop", function() M.move_step(-1, true) end)
 bind("CTRL + SHIFT + SUPER + DOWN", "Move window to next desktop", function() M.move_step(1, true) end)
-bind("SUPER + D", "Desktop overview", "omarchy-shell shell toggle " .. (options.overview_plugin or "nick.desktops"))
+local overview_plugin = options.overview_plugin or "nick1udwig.desktops"
+if overview_plugin == "nick1udwig.desktops" or overview_plugin == "nick.desktops" then
+  bind("SUPER + D", "Desktop overview", hl.dsp.global("omarchy-desktops:toggle"))
+else
+  bind("SUPER + D", "Desktop overview", "omarchy-shell shell toggle " .. overview_plugin)
+end
 
 return M

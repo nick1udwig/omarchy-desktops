@@ -1,5 +1,139 @@
 # Exposé performance
 
+## Current product contract and retained previews, 2026-09-18
+
+[Product requirements](product-requirements.md) supersede the historical timeout
+and fallback policies below. The overview must reveal complete rendered previews
+without flashing, including when capture takes longer than 500 ms. Low latency
+on a 400 MHz CPU is a target, not an established measurement.
+
+The grid and visible sidebar now retain delegates, layout, and completed shared
+previews between openings. Closed-window and output removal still release their
+resources. Capture requests pause while closed. A complete retained cache avoids
+another first-frame export burst; a cold or incomplete cache stays transparent
+until its textures are ready. Wallpaper and controls join the same reveal.
+This intentionally trades retained native capture buffers for less opening work.
+
+The QML regression fixture delays a first frame to 700 ms and verifies that the
+view does not become ready at 500 ms. It also verifies immediate readiness from
+a complete cache, no new first-frame exports on reuse, no capture requests while
+closed, and cancellation. This fixture does not emulate a 400 MHz processor.
+
+### Removing work before the first frame
+
+- Super+D uses a resident Quickshell `GlobalShortcut` and Hyprland's native
+  dispatcher. It no longer starts the shell/timeout/Qt IPC helper chain.
+- Keep each output's native surface mapped, transparent, and without input
+  while closed. Retaining QML delegates alone was insufficient:
+  [Quickshell destroys hidden layer windows](https://github.com/quickshell-mirror/quickshell/blob/master/src/wayland/wlr_layershell/wlr_layershell.cpp).
+  Reusing the scene graph keeps the already-rendered textures available.
+  Monitor-origin changes use Omarchy's remap guard and invalidate lost textures.
+- Defer steady preview refresh until every output has submitted its first
+  visible frame. Cached openings issue **zero exports before that frame**.
+- Style queries run on configuration reload. Wallpaper file/directory watches
+  replace the per-opening stamp process and follow atomic symlink replacement.
+- Build one shared index for desktop/output membership instead of scanning
+  every window separately for each sidebar tile and grid. Primitive per-window
+  observers ignore title/size-only metadata replacements; membership changes
+  in the same event-loop turn share one rebuild. Opening flushes only a dirty
+  index. Search and aspect-ratio changes still update their respective views.
+- Batch capture registration/enabling into one preparation pass, and count
+  pending/in-flight captures without allocating temporary filter arrays.
+
+The asynchronous `Hyprland.refreshToplevels()` remains on opening. Quickshell
+does not track every geometry/pinning change through its current event feed;
+removing this query would make the overview stale. New windows whose geometry
+has not arrived hold the readiness gate instead of appearing after reveal.
+
+### Live measurements
+
+Framework Laptop 13, i7-1280P, Quickshell 0.3.1, Qt 6.11.2, Hyprland 0.56.2,
+three displays around 60 Hz. These measure dispatch-to-visible Qt **frame swap**,
+not a physical keyboard event or display scanout. The 190 ms whole-view opening
+animation follows readiness; the first visible frame already has its previews.
+Samples come from an active desktop, not an isolated or 400 MHz system.
+
+| Final test | First output | All three outputs | Missing previews |
+| --- | ---: | ---: | ---: |
+| Cached, 48 application windows, 4 native openings | 18.3–19.1 ms | 19.3–20.1 ms | 0 |
+| Cached, 112 windows, 5 openings while recording | 19.8–20.7 ms | 25.8–28.7 ms | 0 |
+| Cold, 112 windows, first opening while recording | 216.8 ms | 261.8 ms | 0 |
+
+The 112-window case adds 64 fixed-size, static 320×200 test windows to the
+existing 48. There were 89 unique capture producers, 70 grid cards, and 89
+sidebar placements. All 159 placements were painted. Cached openings requested
+no captures before the first frame; the cold opening exported all 89 sources.
+The cold preparation gate took 171 ms in the final recorded run. An earlier
+unrecorded stress run took 350 ms to reach all outputs, illustrating why cold
+capture and cached latency must be reported separately.
+
+On the final implementation, alternating helper/native activation gave median
+dispatch-to-open times of 24.4 ms and 0.38 ms respectively. Before native surface
+retention, six cached native openings took 84–106 ms to reach all outputs
+(median 93.5 ms); the first retention experiment took 24–32 ms. Window/sidebar
+membership varied between those experiments, so this is not a controlled
+whole-version speedup ratio.
+
+Native-surface retention increased a short whole-shell PSS sample from about
+389 MiB to 457 MiB, approximately 67 MiB across three outputs. This includes
+the rest of Omarchy's shell and is not an isolated GPU-memory measurement.
+Closed capture counts stayed constant. Destroying all probes returned the
+producer count from 89 to 25; output removal also owns normal destruction.
+Retention deliberately trades memory for avoiding native-window, render-context,
+and texture reconstruction on each keypress.
+
+A 60 fps recording was inspected frame by frame around the first reveal and
+across repeated opening/closing: preview content joins the complete view and
+remains populated through closing. Native pointer and keyboard checks verified
+that closed surfaces pass input on all three outputs. Search, Escape, missing
+frame counts, and probe cleanup passed. Recordings and private window metadata
+remain outside the repository.
+
+### Work scaling and repeatable checks
+
+`node test/benchmark-model.js` compares the old repeated filter with one index
+build plus the same 33 lookups (10 desktops × 3 outputs, plus 3 grids). Median
+milliseconds per update, seven alternating samples after warmup:
+
+| Windows | Repeated scans | Shared index | Reduction in time |
+| --- | ---: | ---: | ---: |
+| 50 | 1.379 | 0.073 | 19× |
+| 200 | 5.267 | 0.199 | 26× |
+| 500 | 12.086 | 0.432 | 28× |
+| 1000 | 23.818 | 0.824 | 29× |
+
+This is isolated Node.js work, not a QML rendering or CPU-frequency simulation.
+The same harness measures capture registration: batching reduces the 1000-view
+case from 0.909 ms to 0.032 ms. Actual QML tests additionally verify that 500
+registrations share one bounded preparation pass, 500 title/size updates cause
+zero membership rebuilds, and 252 membership changes cause exactly one rebuild.
+Two hundred generated sessions compare indexed results against the original
+membership predicates, including pins, ordering, filtering, and missing outputs.
+
+Run `python test/benchmark-opening.py --mode both --runs 5` from an unlocked,
+awake session with the overview closed. It alternates native/helper activation
+and outputs timing/request JSON. A fresh shell gives a cold sample; report that
+sample separately. `test/benchmark-windows.qml` is an opt-in disposable stress
+fixture: it starts one fixed-size window, accepts `setCount` on its
+`desktops-perf-probes` IPC target up to 64, and exits after 120 seconds. Verify
+that the first probe is floating before increasing the count, and use `quit`
+to clean it up promptly.
+
+### Remaining opportunities
+
+Cold native-size compositor exports and texture preparation now dominate the
+slow path. Investigate compositor-side downscaling/shared thumbnails and
+completion-driven startup scheduling, preserving the rendered-before-reveal
+barrier. A reliable geometry/pinning event feed could remove the remaining
+activation-time clients query. Measure any prewarming against an explicit CPU
+and memory budget. The zero-latency goal on a 400 MHz machine still needs a real
+slow-CPU test; none of these measurements establish that claim.
+
+## Historical measurements
+
+Results below describe earlier implementations and do not establish the latency
+or reveal policy of the current version.
+
 Measured on 2026-09-04 with Quickshell 0.3.1 and the installed three-monitor Hyprland session: a 1.6× laptop display, a landscape external display, and a portrait external display, all around 60 Hz.
 
 ## What was expensive

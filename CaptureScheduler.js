@@ -15,17 +15,22 @@ function createQueue() {
       if (this.cursor >= this.entries.length) this.cursor = 0
     },
     pending: function() {
-      return this.entries.filter(function(entry) {
-        return entry.view.captureEnabled && !entry.view.hasContent
-      }).length
+      var count = 0
+      for (var i = 0; i < this.entries.length; i++) {
+        var view = this.entries[i].view
+        if ((view.captureEnabled || view.awaitingMetadata) && !view.hasContent) count++
+      }
+      return count
     },
     cached: function() {
       return this.entries.length > 0 && this.entries.every(function(entry) { return entry.view.hasContent })
     },
     prepare: function(now, maxInFlight) {
-      var inFlight = this.entries.filter(function(entry) {
-        return entry.view.captureEnabled && entry.view.captureStarted && !entry.view.hasContent
-      }).length
+      var inFlight = 0
+      for (var n = 0; n < this.entries.length; n++) {
+        var source = this.entries[n].view
+        if (source.captureEnabled && source.captureStarted && !source.hasContent) inFlight++
+      }
       var requests = 0
       for (var i = 0; i < this.entries.length && inFlight < maxInFlight; i++) {
         var entry = this.entries[i], view = entry.view

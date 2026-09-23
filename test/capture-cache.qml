@@ -45,9 +45,9 @@ ShellRoot {
       check(!first.captureEnabled, "hidden consumers stop requesting captures")
       sidebar.capturing = true
       scheduler.ready = true
-      check(first.frozenFallback && !first.captureEnabled, "a missed opening deadline freezes the fallback")
+      check(first.captureEnabled, "a missed opening deadline keeps late captures enabled")
       scheduler.begin()
-      check(!first.frozenFallback && first.captureEnabled, "a new opening retries the frozen source")
+      check(first.captureEnabled, "a new opening preserves capture demand")
       cache.release(first, card)
       check(first.consumers.length === 1 && scheduler.viewCount === 1, "closing one consumer keeps the other capture alive")
       cache.release(first, sidebar)

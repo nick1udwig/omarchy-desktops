@@ -12,10 +12,6 @@ ShaderEffect {
   // Qt's built-in shader samples a texture provider directly.
   readonly property var source: capture ? capture.texture : null
   opacity: hasContent ? 1 : 0
-  Behavior on opacity {
-    enabled: !root.cache.scheduler.preparing
-    NumberAnimation { duration: 100 }
-  }
   Component.onCompleted: capture = cache.acquire(toplevel, root)
   Component.onDestruction: if (cache) cache.release(capture, root)
 }

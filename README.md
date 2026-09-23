@@ -48,7 +48,7 @@ The bar shows the current desktop and each monitor's local workspaces.
 | Shortcut | Action |
 | --- | --- |
 | `Super + D` | Toggle the overview |
-| `Ctrl + Super + Up / Down` | Previous / next desktop; moving past the last creates one |
+| `Ctrl + Super + Up / Down` | Previous / next desktop, looping through an empty new desktop at the end in either direction |
 | `Ctrl + Shift + Super + Up / Down` | Move the focused window to the previous / next desktop and follow it |
 | `Super + 1–9 / 0` | Workspace 1–10 on the focused monitor |
 | `Super + Shift + 1–9 / 0` | Move a window to that workspace and follow it |
@@ -98,7 +98,8 @@ Re-enabling within the same session restores saved desktop assignments.
 
 ## Further reading
 
-See [Architecture](docs/architecture.md) and [Performance](docs/performance.md) for implementation details.
+See [Product requirements](docs/product-requirements.md) for the preview and latency contract,
+and [Architecture](docs/architecture.md) and [Performance](docs/performance.md) for implementation details.
 
 ## License
 

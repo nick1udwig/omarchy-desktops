@@ -16,6 +16,7 @@ noop = setmetatable({}, {
   __call = function() return noop end,
 })
 hl = setmetatable({
+  dsp = { global = function(value) return {kind="global", args=value} end },
   unbind = function(key) unbound[key] = true end,
   on = function() error("keybinding inspection must not subscribe to compositor events") end,
 }, { __index = function() return noop end })
@@ -34,7 +35,7 @@ assert(controller() == o.desktops, "mock inspection loads without compositor ini
 local count = 0
 for _ in pairs(bindings) do count = count + 1 end
 assert(count == 40, "all workspace and desktop bindings remain discoverable")
-assert(bindings["SUPER + D"] == "omarchy-shell shell toggle nick.desktops")
+assert(bindings["SUPER + D"].kind == "global" and bindings["SUPER + D"].args == "omarchy-desktops:toggle")
 assert(type(bindings["CTRL + SUPER + DOWN"]) == "function")
 assert(type(bindings["CTRL + SHIFT + SUPER + UP"]) == "function")
 

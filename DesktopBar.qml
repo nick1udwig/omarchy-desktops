@@ -8,7 +8,7 @@ import "."
 
 BarWidget {
   id: root
-  moduleName: "nick.desktops"
+  moduleName: "nick1udwig.desktops"
   readonly property string output: QsWindow.window && QsWindow.window.screen ? QsWindow.window.screen.name : DesktopState.focusedMonitor
   readonly property var slots: DesktopState.workspaceSlots(DesktopState.current, output)
   implicitWidth: grid.implicitWidth

@@ -50,6 +50,7 @@ hl = {
   unbind = function(key) bindings[key] = nil end,
   on = function(name, callback) handlers[name] = callback end,
   dsp = {
+    global = function(value) return action("global", value) end,
     event = function(value) return action("event", value) end,
     focus = function(args) return action("focus", args) end,
     workspace = { move = function(args) return action("workspace_move", args) end },
@@ -235,7 +236,7 @@ visible(2)
 for _, key in ipairs({ "CTRL + SUPER + UP", "CTRL + SUPER + DOWN", "CTRL + SHIFT + SUPER + UP", "CTRL + SHIFT + SUPER + DOWN" }) do
   assert(type(bindings[key]) == "function", "desktop shortcut is registered: " .. key)
 end
-assert(bindings["SUPER + D"] == "omarchy-shell shell toggle nick.desktops", "Super+D toggles this plugin's overview")
+assert(bindings["SUPER + D"].kind == "global" and bindings["SUPER + D"].args == "omarchy-desktops:toggle", "Super+D reaches the resident plugin without starting a process")
 for _, key in ipairs({ "CTRL + ALT + UP", "CTRL + ALT + DOWN", "CTRL + ALT + SHIFT + UP", "CTRL + ALT + SHIFT + DOWN", "SUPER + CTRL + SPACE" }) do
   assert(bindings[key] == nil, "old desktop shortcut is no longer registered: " .. key)
 end
@@ -244,6 +245,23 @@ assert(state().current == 1, "Ctrl+Super+Up selects the previous desktop")
 visible(1)
 bindings["CTRL + SUPER + DOWN"]()
 assert(state().current == 2, "Ctrl+Super+Down selects the next desktop")
+visible(2)
+bindings["CTRL + SUPER + DOWN"]()
+assert(state().current == 3 and #state().desktops == 3, "Down on the occupied last desktop creates a new desktop")
+visible(3)
+bindings["CTRL + SUPER + DOWN"]()
+assert(state().current == 1 and #state().desktops == 2, "Down on the empty new desktop wraps to the first and removes the empty desktop")
+visible(1)
+bindings["CTRL + SUPER + UP"]()
+assert(state().current == 3 and #state().desktops == 3, "Up on the first desktop wraps through a new empty desktop at the end")
+visible(3)
+bindings["CTRL + SUPER + DOWN"]()
+assert(state().current == 1 and #state().desktops == 2, "Down from the empty desktop created by Up wraps back to the first")
+visible(1)
+bindings["CTRL + SUPER + UP"]()
+visible(3)
+bindings["CTRL + SUPER + UP"]()
+assert(state().current == 2 and #state().desktops == 2, "Up from the empty final desktop selects the last occupied desktop and removes the empty one")
 visible(2)
 controller.move(2, "left", 1, "0x123", true)
 bindings["CTRL + SHIFT + SUPER + UP"]()
@@ -263,7 +281,9 @@ omarchy_desktops.bindings = false
 bindings = {}
 controller = load_controller()
 assert(next(bindings) == nil, "custom bindings may be managed separately")
-assert(selected(2, "left").slots[#selected(2, "left").slots] == 892, "re-enabling adopts workspaces created while disabled")
+local adopted = false
+for _, id in ipairs(selected(2, "left").slots) do if id == 892 then adopted = true end end
+assert(adopted, "re-enabling adopts workspaces created while disabled")
 controller.rename(2, string.rep("é", 60))
 assert(state().desktops[2].name == string.rep("é", 60), "desktop names accept Unicode characters")
 visible(2)
@@ -325,8 +345,11 @@ controller.focus(1, "left")
 assert(#state().desktops == 1 and state().current == 1, "cleanup retains the current empty desktop")
 controller.add()
 assert(#state().desktops == 1 and state().current == 1, "repeated creation cannot accumulate empty desktops")
+local only_workspace = selected(1, "left").slots[1]
 controller.step(1)
-assert(#state().desktops == 1, "stepping past an empty desktop replaces it")
+controller.step(-1)
+assert(#state().desktops == 1 and state().current == 1 and selected(1, "left").slots[1] == only_workspace,
+  "both directions on a single empty desktop keep the same desktop")
 local keeper = { address = "0x456", mapped = true, monitor = left,
   workspace = ensure_workspace(selected(1, "right").slots[9], right) }
 windows[keeper.address] = keeper

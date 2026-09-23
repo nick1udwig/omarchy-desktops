@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import Quickshell.Wayland
 import "vendor/expose/WindowModel.js" as WindowModel
 
@@ -14,12 +15,29 @@ Item {
   readonly property bool validSize: windowSize[0] > 0 && windowSize[1] > 0
   property bool captureStopped: false
   property bool textureReady: false
-  property bool frozenFallback: false
-  readonly property bool captureEnabled: activeConsumers.length > 0 && Boolean(source) && validSize && !captureStopped && !frozenFallback
+  readonly property var renderWindow: root.Window.window
+  onRenderWindowChanged: {
+    // A monitor-layout remap discards the scene graph. Retained native
+    // buffers must be rendered into the new context before revealing again.
+    if (!renderWindow && textureReady) {
+      textureReady = false
+      if (scheduler) scheduler.invalidate()
+    }
+    if (renderWindow && copy.hasContent) texture.scheduleUpdate()
+  }
+  readonly property bool captureEnabled: activeConsumers.length > 0 && Boolean(source) && validSize && !captureStopped
+  readonly property bool awaitingMetadata: activeConsumers.length > 0 && Boolean(source)
+    && windowSize.length < 2 && !captureStopped
   readonly property bool captureStarted: Boolean(copy.captureSource)
   readonly property bool hasContent: copy.hasContent && textureReady
   readonly property int refreshInterval: activeConsumers.reduce(function(rate, view) { return Math.min(rate, view.refreshInterval) }, 1000)
   readonly property alias texture: texture
+
+  function status() {
+    return { enabled: captureEnabled, started: captureStarted, frame: copy.hasContent,
+      texture: textureReady, stopped: captureStopped,
+      width: width, height: height }
+  }
 
   // Render only at the largest displayed size. Both consumers sample this
   // texture directly; neither requests another full-window compositor export.
@@ -31,7 +49,7 @@ Item {
   y: -height - 1
   onSourceChanged: { copy.captureSource = null; captureStopped = false }
   onValidSizeChanged: { if (!validSize) copy.captureSource = null; captureStopped = false }
-  onCaptureEnabledChanged: if (captureEnabled) scheduler.prime()
+  onCaptureEnabledChanged: if (captureEnabled) scheduler.schedule()
 
   function refresh() {
     if (!captureEnabled) return false
@@ -39,19 +57,6 @@ Item {
     if (!copy.hasContent) return false
     copy.captureFrame()
     return true
-  }
-
-  Connections {
-    target: root.scheduler
-    function onPreparingChanged() { if (root.scheduler.preparing) root.frozenFallback = false }
-    function onReadyChanged() {
-      // The bounded fallback must remain stable for this opening. A late
-      // stream must not turn an already revealed thumbnail into a new scene.
-      if (root.scheduler.ready && !root.hasContent) {
-        root.frozenFallback = true
-        copy.captureSource = null
-      }
-    }
   }
 
   ScreencopyView {

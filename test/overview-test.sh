@@ -18,8 +18,9 @@ function screenFunction(name) {
 }
 const keyboard = vm.createContext({
   opened: true, acceptsKeyboard: true, backingWindowVisible: true, focusPrimed: true,
-  manager: { draggedWindow: '', filterText: '', close() { keyboard.opened = false } },
+  manager: { captureScheduler: {ready:true}, draggedWindow: '', filterText: '', close() { keyboard.opened = false } },
   search: { forceActiveFocus() { keyboard.searchFocused = true } },
+  content: { forceActiveFocus() { keyboard.preparationFocused = true } },
   focusPrime: { restart() { keyboard.primeRestarted = true } },
   Qt: { Key_Escape: 27 }, previewIndex: -1,
 })
@@ -30,6 +31,14 @@ assert(keyboard.searchFocused && !keyboard.focusPrimed && keyboard.primeRestarte
 const escape = {key:27, accepted:false}
 keyboard.handleKey(escape)
 assert(!keyboard.opened && escape.accepted, 'Escape closes the overview after keyboard focus recovery')
+keyboard.opened = true
+keyboard.searchFocused = false
+keyboard.manager.captureScheduler.ready = false
+keyboard.focusSearch()
+assert(keyboard.preparationFocused && !keyboard.searchFocused, 'pending previews focus the cancellation handler without enabling search')
+keyboard.handleKey(escape)
+assert(!keyboard.opened, 'Escape cancels an opening before previews are ready')
+keyboard.manager.captureScheduler.ready = true
 for (const mode of ['closed', 'other output', 'dragging']) {
   keyboard.opened = mode !== 'closed'
   keyboard.acceptsKeyboard = mode !== 'other output'
@@ -40,6 +49,9 @@ for (const mode of ['closed', 'other output', 'dragging']) {
 }
 const WindowModel = qmlJs('vendor/expose/WindowModel.js')
 const model = qmlJs('OverviewModel.js', {WindowModel})
+function windowsFor(snapshot, desktop, output, windows, query) {
+  return model.windowsFor(model.indexWindows(snapshot, windows), desktop, output, query)
+}
 const layout = qmlJs('vendor/expose/Layout.js', {WindowModel})
 const icons = qmlJs('vendor/expose/IconResolver.js')
 const snapshot = {desktops:[
@@ -51,22 +63,61 @@ function top(address, output, workspace, title = 'Window', ratio = 1.6) {
 }
 const tops = [top('a','left',1),top('b','left',2,'Alpha editor'),top('c','right',4),top('d','right',5),top('e','left',13),top('f','right',15)]
 assertDeepEqual(model.selectedWorkspace(snapshot,1,'left'), {id:2,slot:2}, 'desktop thumbnails use the remembered workspace, not always slot one')
-assertDeepEqual(model.windowsFor(snapshot,1,'left',tops,'').map(w=>w.address), ['b'], 'left Exposé shows only its selected workspace')
-assertDeepEqual(model.windowsFor(snapshot,1,'right',tops,'').map(w=>w.address), ['c'], 'right Exposé has its own selected workspace')
-assertDeepEqual(model.windowsFor(snapshot,2,'left',tops,'').map(w=>w.address), ['e'], 'desktop switching changes the left workspace scope')
-assertDeepEqual(model.windowsFor(snapshot,2,'right',tops,'').map(w=>w.address), ['f'], 'desktop switching changes the right workspace scope')
-assertDeepEqual(model.windowsFor(snapshot,1,'left',tops,' ALPHA ').map(w=>w.address), ['b'], 'filter is case-insensitive and searches titles')
-assertEqual(model.windowsFor(snapshot,1,'left',tops,'terminal').length, 1, 'filter searches application identities using the upstream model')
-assertEqual(model.windowsFor(snapshot,1,'right',tops,'Alpha').length, 0, 'shared search never leaks another monitor’s windows into the grid')
-assertEqual(model.windowsFor(snapshot,99,'left',tops,'').length, 0, 'missing desktop is safe during asynchronous updates')
-assertEqual(model.windowsFor(snapshot,1,'removed',tops,'').length, 0, 'removed monitor is safe')
+assertDeepEqual(windowsFor(snapshot,1,'left',tops,'').map(w=>w.address), ['b'], 'left Exposé shows only its selected workspace')
+assertDeepEqual(windowsFor(snapshot,1,'right',tops,'').map(w=>w.address), ['c'], 'right Exposé has its own selected workspace')
+assertDeepEqual(windowsFor(snapshot,2,'left',tops,'').map(w=>w.address), ['e'], 'desktop switching changes the left workspace scope')
+assertDeepEqual(windowsFor(snapshot,2,'right',tops,'').map(w=>w.address), ['f'], 'desktop switching changes the right workspace scope')
+assertDeepEqual(windowsFor(snapshot,1,'left',tops,' ALPHA ').map(w=>w.address), ['b'], 'filter is case-insensitive and searches titles')
+assertEqual(windowsFor(snapshot,1,'left',tops,'terminal').length, 1, 'filter searches application identities using the upstream model')
+assertEqual(windowsFor(snapshot,1,'right',tops,'Alpha').length, 0, 'shared search never leaks another monitor’s windows into the grid')
+assertEqual(windowsFor(snapshot,99,'left',tops,'').length, 0, 'missing desktop is safe during asynchronous updates')
+assertEqual(windowsFor(snapshot,1,'removed',tops,'').length, 0, 'removed monitor is safe')
 const pinned = top('pin','left',1); pinned.lastIpcObject.pinned = true
-assertEqual(model.windowsFor(snapshot,1,'left',[pinned],'').length, 1, 'pinned windows remain visible on their monitor')
-assertEqual(model.windowsFor(snapshot,1,'right',[pinned],'').length, 0, 'pinned windows do not appear on every monitor')
+assertEqual(windowsFor(snapshot,1,'left',[pinned],'').length, 1, 'pinned windows remain visible on their monitor')
+assertEqual(windowsFor(snapshot,1,'right',[pinned],'').length, 0, 'pinned windows do not appear on every monitor')
 tops[1].lastIpcObject.mapped = false
-assertEqual(model.windowsFor(snapshot,1,'left',tops,'').length, 0, 'closing a window removes its card')
+assertEqual(windowsFor(snapshot,1,'left',tops,'').length, 0, 'closing a window removes its card')
 tops[1].lastIpcObject.mapped = true
+
+// Compare with the previous full-list filter, including ordering and pins.
+let seed = 42
+function random(n) { seed = (Math.imul(seed,1664525)+1013904223) >>> 0; return seed % n }
+for (let sample = 0; sample < 200; sample++) {
+  const state = {desktops:Array.from({length:1+random(10)}, () => ({outputs:Object.fromEntries(
+    ['left','right','__proto__'].map(name => [name, {slots:[1+random(24),1+random(24)],selected:1+random(3)}])
+  )}))}
+  const windows = Array.from({length:random(150)}, (_,i) => {
+    const w = top(String(i), ['left','right','__proto__','disconnected'][random(4)], random(26), i % 2 ? 'Alpha' : 'Beta')
+    if (random(7) === 0) w.wayland = null
+    if (random(8) === 0) w.lastIpcObject.mapped = false
+    if (random(9) === 0) w.lastIpcObject.pinned = true
+    if (random(13) === 0) w.workspace = null
+    return w
+  })
+  const indexed = model.indexWindows(state, windows)
+  for (let d = 1; d <= state.desktops.length+1; d++) for (const output of ['left','right','__proto__','gone']) {
+    const workspace = model.selectedWorkspace(state,d,output)
+    for (const query of ['', ' ALPHA ']) {
+      const expected = workspace ? windows.filter(w => WindowModel.isEligible(w)
+        && WindowModel.isOnScreen(w,output,true) && WindowModel.isOnWorkspace(w,workspace)
+        && (!query || WindowModel.searchTextFor(w).includes(query.trim().toLowerCase()))) : []
+      const actual = model.windowsFor(indexed,d,output,query)
+      if (!model.sameWindows(actual,expected)) fail('indexed windows match the full-list filter', `sample=${sample}, desktop=${d}, output=${output}`)
+    }
+  }
+}
+pass('200 generated sessions preserve window order, pinned placement, search, and missing-workspace behavior')
+const eligible = WindowModel.isEligible
+let membershipReads = 0
+WindowModel.isEligible = w => { membershipReads++; return eligible(w) }
+const indexed = model.indexWindows(snapshot,tops)
+for (let repeat = 0; repeat < 100; repeat++) model.windowsFor(indexed,1,'left','')
+assertEqual(membershipReads,tops.length,'building all window lists reads eligibility once per window; repeated lookups do no membership work')
+assert(model.windowsFor(indexed,1,'left','') === model.windowsFor(indexed,1,'left',''),'unfiltered lookups reuse the prepared array without allocation')
+WindowModel.isEligible = eligible
 assert(model.sameWindows(tops,tops.slice()), 'metadata updates keep stable card instances')
+assert(model.sameWindows([],undefined) && model.sameWindows(undefined,[]),'deferred QML list initialization is an empty state, not a panel-registration exception')
+assertEqual(model.windowsFor(undefined,1,'left','').length,0,'an index binding that has not initialized returns an empty list')
 assert(!model.sameWindows(tops,tops.slice().reverse()), 'a changed card order is detected')
 assertDeepEqual(model.dropTarget(snapshot,tops[1],1,'right'), {address:'b',desktop:1,output:'right',slot:1}, 'dropping on another monitor uses its selected workspace')
 assertDeepEqual(model.dropTarget(snapshot,tops[1],2,'right'), {address:'b',desktop:2,output:'right',slot:2}, 'a cross-monitor desktop drop uses the destination remembered slot')

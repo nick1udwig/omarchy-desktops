@@ -21,7 +21,7 @@ BorderSurface {
   readonly property bool current: desktopId === DesktopState.current
   readonly property var windowsSource: {
     if (!presented) return []
-    return Model.windowsFor(DesktopState.snapshot, desktopId, output.name, manager.toplevels, "")
+    return Model.windowsFor(manager.windowIndex, desktopId, output.name, "")
   }
   property var windows: []
   function previewStatus() {

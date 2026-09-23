@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell
@@ -28,14 +29,13 @@ PanelWindow { // qmllint disable uncreatable-type
   }
   property var screenToplevels: []
   readonly property var candidates: {
-    if (!visible) return []
-    return Model.windowsFor(DesktopState.snapshot, DesktopState.current, outputName, manager.toplevels, "")
+    return Model.windowsFor(manager.windowIndex, DesktopState.current, outputName, "")
   }
   property var cardToplevels: []
   property int selectedIndex: 0
   property int previewIndex: -1
   property int previewExitIndex: -1
-  property real progress: opened ? 1 : 0
+  property real progress: opened && manager.captureScheduler.ready ? 1 : 0
   property real dragY: -1
   readonly property bool motionSettled: progress > 0.99 && manager.draggedWindow === ""
   readonly property int windowFooterHeight: Style.space(40)
@@ -45,15 +45,21 @@ PanelWindow { // qmllint disable uncreatable-type
   readonly property real sidebarWidth: Math.min(Style.space(238), width * 0.23)
   property bool registered: false
   property bool focusPrimed: false
+  property double firstFrameAt: 0
+  property int firstFrameRequests: 0
+  readonly property bool showing: opened || progress > 0
   readonly property alias captureCache: captureCache
-  property real contentOpacity: opened && manager.captureScheduler.ready ? 1 : 0
-  Behavior on contentOpacity {
-    enabled: !surface.manager.captureScheduler.preparing
-    NumberAnimation { duration: Math.max(60, Math.min(100, 190 - surface.manager.captureScheduler.preparationMs)) }
-  }
+  // Map transparently to prepare textures, then animate the complete scene.
+  // Keep its contents intact while the closing animation runs.
+  readonly property real contentOpacity: manager.captureScheduler.ready ? 1 : 0
 
   screen: null
-  visible: opened || progress > 0
+  // Hiding a Quickshell layer panel destroys its native window and scene
+  // graph. Keep the transparent surface resident so its rendered previews
+  // survive too. The empty input region and keyboard mode release all input.
+  visible: !remapGuard.remapping
+  mask: Region { width: surface.opened ? surface.width : 0; height: surface.opened ? surface.height : 0 }
+  ScreenMoveRemap { id: remapGuard; window: surface }
   anchors { top: true; bottom: true; left: true; right: true }
   exclusionMode: ExclusionMode.Ignore
   color: "transparent"
@@ -80,6 +86,7 @@ PanelWindow { // qmllint disable uncreatable-type
   onScreenToplevelsSourceChanged: syncFiltered()
   onOpenedChanged: {
     if (opened) {
+      firstFrameAt = 0
       selectedIndex = Math.max(0, screenToplevels.indexOf(Hyprland.activeToplevel))
       previewIndex = -1
       previewExitIndex = -1
@@ -104,7 +111,8 @@ PanelWindow { // qmllint disable uncreatable-type
 
   function focusSearch() {
     if (!opened) return
-    search.forceActiveFocus()
+    if (manager.captureScheduler.ready) search.forceActiveFocus()
+    else content.forceActiveFocus()
     if (acceptsKeyboard) {
       focusPrimed = false
       if (backingWindowVisible) focusPrime.restart()
@@ -144,7 +152,9 @@ PanelWindow { // qmllint disable uncreatable-type
   }
 
   function status() {
-    return { output: outputName, visible: visible, desktop: DesktopState.current, workspace: workspace ? workspace.id : 0,
+    return { output: outputName, visible: showing, desktop: DesktopState.current, workspace: workspace ? workspace.id : 0,
+      contentOpacity: contentOpacity, interactive: content.enabled && rail.enabled && grid.enabled,
+      firstFrameAt: firstFrameAt, firstFrameRequests: firstFrameRequests,
       slot: workspace ? workspace.slot : 0, windows: screenToplevels.map(function(w) { return w.address }),
       desktops: DesktopState.desktops.length, preview: previewIndex, keyboard: acceptsKeyboard,
       appearance: { radius: Style.cornerRadius, panel: String(Color.menu.background), text: String(Color.menu.text),
@@ -170,6 +180,16 @@ PanelWindow { // qmllint disable uncreatable-type
   }
 
   Timer { id: focusPrime; interval: 75; onTriggered: surface.focusPrimed = true }
+  Connections {
+    target: surface.contentItem.Window.window
+    enabled: surface.opened && !surface.firstFrameAt
+    function onFrameSwapped() {
+      if (surface.opened && surface.progress > 0 && surface.manager.captureScheduler.ready && !surface.firstFrameAt) {
+        surface.firstFrameRequests = surface.manager.captureScheduler.requests
+        surface.firstFrameAt = Date.now()
+      }
+    }
+  }
   Timer { id: previewExit; interval: 240; onTriggered: surface.previewExitIndex = -1 }
   Timer {
     interval: 30
@@ -197,6 +217,7 @@ PanelWindow { // qmllint disable uncreatable-type
     anchors.fill: parent
     opacity: surface.progress
     enabled: surface.opened
+    Keys.onEscapePressed: surface.manager.close()
     Rectangle { anchors.fill: parent; color: Color.background }
     Image {
       id: wallpaper
@@ -221,7 +242,7 @@ PanelWindow { // qmllint disable uncreatable-type
     BorderSurface {
       id: rail
       opacity: surface.contentOpacity
-      enabled: surface.manager.captureScheduler.ready
+      enabled: surface.opened && surface.manager.captureScheduler.ready
       anchors { top: parent.top; bottom: parent.bottom; left: parent.left; margins: Style.space(18) }
       width: surface.sidebarWidth
       radius: Style.cornerRadius
@@ -255,7 +276,9 @@ PanelWindow { // qmllint disable uncreatable-type
             manager: surface.manager
             captureCache: surface.captureCache
             output: surface.output
-            presented: surface.visible && y + height >= sidebar.contentY && y <= sidebar.contentY + sidebar.height
+            // Retain the visible rail's delegates and completed textures while
+            // closed. Capturing remains paused until the overview opens.
+            presented: y + height >= sidebar.contentY && y <= sidebar.contentY + sidebar.height
             capturing: surface.opened && presented
           }
         }
@@ -273,7 +296,7 @@ PanelWindow { // qmllint disable uncreatable-type
 
     ColumnLayout {
       opacity: surface.contentOpacity
-      enabled: surface.manager.captureScheduler.ready
+      enabled: surface.opened && surface.manager.captureScheduler.ready
       anchors { top: parent.top; bottom: parent.bottom; left: rail.right; right: parent.right; topMargin: Style.space(36); bottomMargin: Style.space(25); leftMargin: Style.space(30); rightMargin: Style.space(36) }
       spacing: Style.space(20)
 
@@ -390,7 +413,9 @@ PanelWindow { // qmllint disable uncreatable-type
           outputName: surface.outputName
         }
         Repeater {
-          model: surface.visible ? surface.cardToplevels : []
+          // Keep layout and shared previews warm between openings. Membership
+          // still follows the workspace, so closed windows release resources.
+          model: surface.cardToplevels
           delegate: ExposeCard {
             objectName: "expose-card"
             controller: surface

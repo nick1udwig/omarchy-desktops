@@ -30,5 +30,5 @@ for (const [name, text] of [['overview',screen],['thumbnail',thumbnail],['card',
   assert(text.includes('Border.surfaceSpec(') && text.includes('Border.hyprlandActiveSpec('), `${name} preserves theme border gradients and widths`)
 }
 assert(card.includes('objectName: "window-caption"') && !card.includes('sourceComponent:'), 'floating captions are created directly without unused footer loaders')
-assert(read('Overview.qml').includes('Style.refresh()'), 'opening refreshes the user’s current compositor corner setting')
+assert(read('Overview.qml').includes('if (event.name === "configreloaded") Style.refresh()'), 'compositor reloads refresh corner settings outside the opening path')
 JS
