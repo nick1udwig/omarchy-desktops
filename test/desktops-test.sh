@@ -414,6 +414,21 @@ controller = load_controller()
 reconnect(right)
 assert(selected(1, "right").slots[1] == saved_right, "reconnect after collapse and reload restores the surviving output slots")
 visible(1)
+-- Leaving an empty first desktop in the reverse direction must select the
+-- existing occupied desktop, then promote it to Desktop 1.
+controller.add()
+local promoted = { address = "0xabc", mapped = true, monitor = left,
+  workspace = ensure_workspace(selected(2, "left").slots[1], left) }
+windows[promoted.address] = promoted
+controller.switch(1)
+controller.move(2, "left", 1, keeper.address, false)
+assert(#state().desktops == 2 and state().current == 1, "the empty first desktop stays available while viewed")
+controller.step(-1)
+assert(#state().desktops == 1 and state().current == 1 and state().desktops[1].name == "Desktop 1",
+  "reverse navigation promotes the occupied second desktop after leaving empty Desktop 1")
+assert(selected(1, "left").slots[1] == keeper.workspace.id and promoted.workspace.id == keeper.workspace.id,
+  "promotion preserves both windows' destination workspace")
+visible(1)
 print("ok - desktop isolation, restore, movement, external workspaces, reload, hotplug, disabling, and scaled output geometry")
 LUA
 

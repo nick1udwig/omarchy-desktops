@@ -276,7 +276,11 @@ function M.step(direction)
   local target = state.current + direction
   if target < 1 then
     target = #state.desktops
-    if occupied_desktops()[target] then target = create() end
+    local occupied = occupied_desktops()
+    -- If Desktop 1 is empty, visit the existing last desktop so cleanup can
+    -- remove Desktop 1 and renumber the destination. Otherwise, keep the
+    -- empty-desktop step between occupied endpoints.
+    if occupied[state.current] and occupied[target] then target = create() end
   elseif target > #state.desktops then
     if occupied_desktops()[state.current] then create() else target = 1 end
   end

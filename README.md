@@ -48,7 +48,7 @@ The bar shows the current desktop and each monitor's local workspaces.
 | Shortcut | Action |
 | --- | --- |
 | `Super + D` | Toggle the overview |
-| `Ctrl + Super + Up / Down` | Previous / next desktop, looping through an empty new desktop at the end in either direction |
+| `Ctrl + Super + Up / Down` | Previous / next desktop; stepping past an occupied end creates an empty desktop before wrapping |
 | `Ctrl + Shift + Super + Up / Down` | Move the focused window to the previous / next desktop and follow it |
 | `Super + 1–9 / 0` | Workspace 1–10 on the focused monitor |
 | `Super + Shift + 1–9 / 0` | Move a window to that workspace and follow it |
