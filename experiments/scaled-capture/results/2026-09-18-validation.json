@@ -1,0 +1,58 @@
+[
+  {
+    "case": "trace",
+    "samples": 1,
+    "images_checked": 1,
+    "all_previews_ready": true,
+    "divisors": [
+      4
+    ]
+  },
+  {
+    "case": "shm",
+    "samples": 6,
+    "images_checked": 3,
+    "all_previews_ready": true,
+    "divisors": [
+      1,
+      4,
+      8
+    ]
+  },
+  {
+    "case": "odd",
+    "samples": 8,
+    "images_checked": 4,
+    "all_previews_ready": true,
+    "divisors": [
+      1,
+      2,
+      4,
+      8
+    ]
+  },
+  {
+    "case": "fractional2",
+    "samples": 8,
+    "images_checked": 4,
+    "all_previews_ready": true,
+    "divisors": [
+      1,
+      2,
+      4,
+      8
+    ]
+  },
+  {
+    "case": "subsurface",
+    "samples": 8,
+    "images_checked": 4,
+    "all_previews_ready": true,
+    "divisors": [
+      1,
+      2,
+      4,
+      8
+    ]
+  }
+]

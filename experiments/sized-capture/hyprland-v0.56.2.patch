@@ -1,0 +1,252 @@
+diff --git i/src/managers/ProtocolManager.cpp w/src/managers/ProtocolManager.cpp
+index bf20269..e1d77f9 100644
+--- i/src/managers/ProtocolManager.cpp
++++ w/src/managers/ProtocolManager.cpp
+@@ -227,7 +227,7 @@ CProtocolManager::CProtocolManager() {
+ 
+     // Screensharing Protocols
+     PROTO::screencopy         = makeUnique<CScreencopyProtocol>(&zwlr_screencopy_manager_v1_interface, 3, "Screencopy");
+-    PROTO::toplevelExport     = makeUnique<CToplevelExportProtocol>(&hyprland_toplevel_export_manager_v1_interface, 2, "ToplevelExport");
++    PROTO::toplevelExport     = makeUnique<CToplevelExportProtocol>(&hyprland_toplevel_export_manager_v1_interface, 3, "ToplevelExport");
+     PROTO::imageCaptureSource = makeUnique<CImageCaptureSourceProtocol>(); // ctor inits actual protos, output and toplevel
+     PROTO::imageCopyCapture   = makeUnique<CImageCopyCaptureProtocol>(&ext_image_copy_capture_manager_v1_interface, 1, "ImageCopyCapture");
+ 
+diff --git i/src/managers/screenshare/ScreenshareFrame.cpp w/src/managers/screenshare/ScreenshareFrame.cpp
+index c74adcb..3668346 100644
+--- i/src/managers/screenshare/ScreenshareFrame.cpp
++++ w/src/managers/screenshare/ScreenshareFrame.cpp
+@@ -22,9 +22,21 @@ using namespace Hyprgraphics::Egl;
+ using namespace Screenshare;
+ using namespace Desktop::View;
+ 
+-CScreenshareFrame::CScreenshareFrame(WP<CScreenshareSession> session, bool overlayCursor, bool isFirst) :
++CScreenshareFrame::CScreenshareFrame(WP<CScreenshareSession> session, bool overlayCursor, bool isFirst, const Vector2D& maxSize) :
+     m_session(session), m_bufferSize(m_session->bufferSize()), m_overlayCursor(overlayCursor), m_isFirst(isFirst) {
+-    ;
++    // Session constraints remain native. Different consumers can request
++    // different sizes of the same source, even on the same Wayland connection.
++    if (m_session->m_type != SHARE_WINDOW || m_bufferSize.x <= 0 || m_bufferSize.y <= 0)
++        return;
++
++    const uint64_t nativeWidth = m_bufferSize.x, nativeHeight = m_bufferSize.y;
++    uint64_t       width  = maxSize.x > 0 ? std::min(nativeWidth, sc<uint64_t>(maxSize.x)) : nativeWidth;
++    uint64_t       height = maxSize.y > 0 ? std::min(nativeHeight, sc<uint64_t>(maxSize.y)) : nativeHeight;
++    if (width * nativeHeight <= height * nativeWidth)
++        height = std::max(uint64_t{1}, width * nativeHeight / nativeWidth);
++    else
++        width = std::max(uint64_t{1}, height * nativeWidth / nativeHeight);
++    m_bufferSize = {sc<double>(width), sc<double>(height)};
+ }
+ 
+ CScreenshareFrame::~CScreenshareFrame() {
+@@ -323,10 +335,17 @@ void CScreenshareFrame::renderWindow() {
+     const auto NOW = Time::steadyNow();
+ 
+     // TODO: implement a monitor independent render mode to buffer that does this in CHyprRenderer::begin() or something like that
+-    g_pHyprRenderer->m_renderData.fbSize = m_bufferSize;
++    // Keep window geometry/damage in source pixels; the smaller viewport does
++    // the downsampling while drawing directly into the client's capture buffer.
++    // OpenGL::scissor converts source-pixel clips to destination pixels below.
++    const auto sourceSize                = (PWINDOW->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT) * PMONITOR->m_scale).round();
++    g_pHyprRenderer->m_renderData.fbSize = sourceSize;
++    if (sourceSize != m_bufferSize)
++        g_pHyprRenderer->setDamage(CRegion{0, 0, sourceSize.x, sourceSize.y}, std::nullopt);
+     g_pHyprRenderer->setProjectionType(Render::RPT_EXPORT);
+     g_pHyprRenderer->m_renderData.transformDamage = false;
+-    g_pHyprRenderer->setViewport(0, 0, m_bufferSize.x, m_bufferSize.y);
++    const auto targetSize                         = g_pHyprRenderer->m_renderData.currentFB->m_size;
++    g_pHyprRenderer->setViewport(0, 0, targetSize.x, targetSize.y);
+ 
+     g_pHyprRenderer->m_bBlockSurfaceFeedback = g_pHyprRenderer->shouldRenderWindow(PWINDOW); // block the feedback to avoid spamming the surface if it's visible
+     g_pHyprRenderer->renderWindow(PWINDOW, PMONITOR, NOW, false, Render::RENDER_PASS_ALL, true, true);
+@@ -359,7 +378,12 @@ void CScreenshareFrame::renderWindow() {
+ void CScreenshareFrame::render() {
+     const auto PERM = g_pDynamicPermissionManager->clientPermissionMode(m_session->m_client, PERMISSION_TYPE_SCREENCOPY);
+ 
+-    CRegion    frameRegion = {0, 0, g_pHyprRenderer->m_renderData.pMonitor->m_pixelSize.x, g_pHyprRenderer->m_renderData.pMonitor->m_pixelSize.y};
++    // Window buffers are untransformed, even on a rotated output. Clear all
++    // buffer pixels before blending transparent surfaces into a reused buffer.
++    if (m_session->m_type == SHARE_WINDOW)
++        g_pHyprRenderer->m_renderData.transformDamage = false;
++
++    CRegion frameRegion = {0, 0, g_pHyprRenderer->m_renderData.pMonitor->m_pixelSize.x, g_pHyprRenderer->m_renderData.pMonitor->m_pixelSize.y};
+ 
+     g_pHyprRenderer->draw(CClearPassElement::SClearData{{0, 0, 0, 0}}, frameRegion);
+ 
+@@ -482,7 +506,8 @@ bool CScreenshareFrame::copyShm() {
+ void CScreenshareFrame::storeTempFB() {
+     if (!m_session->m_tempFB)
+         m_session->m_tempFB = g_pHyprRenderer->createFB();
+-    m_session->m_tempFB->alloc(m_bufferSize.x, m_bufferSize.y);
++    const auto snapshotSize = m_session->bufferSize();
++    m_session->m_tempFB->alloc(snapshotSize.x, snapshotSize.y);
+     m_session->m_tempFB->setImageDescription(NColorManagement::DEFAULT_SRGB_IMAGE_DESCRIPTION);
+ 
+     CRegion fakeDamage = {0, 0, INT16_MAX, INT16_MAX};
+diff --git i/src/managers/screenshare/ScreenshareManager.hpp w/src/managers/screenshare/ScreenshareManager.hpp
+index d115d21..c095a76 100644
+--- i/src/managers/screenshare/ScreenshareManager.hpp
++++ w/src/managers/screenshare/ScreenshareManager.hpp
+@@ -43,7 +43,7 @@ namespace Screenshare {
+         CScreenshareSession(CScreenshareSession&&)      = delete;
+         ~CScreenshareSession();
+ 
+-        UP<CScreenshareFrame> nextFrame(bool overlayCursor);
++        UP<CScreenshareFrame> nextFrame(bool overlayCursor, const Vector2D& maxSize = {});
+         void                  stop();
+         bool                  isActive();
+ 
+@@ -156,7 +156,7 @@ namespace Screenshare {
+       public:
+         CScreenshareFrame(const CScreenshareFrame&) = delete;
+         CScreenshareFrame(CScreenshareFrame&&)      = delete;
+-        CScreenshareFrame(WP<CScreenshareSession> session, bool overlayCursor, bool isFirst);
++        CScreenshareFrame(WP<CScreenshareSession> session, bool overlayCursor, bool isFirst, const Vector2D& maxSize = {});
+         ~CScreenshareFrame();
+ 
+         bool                done() const;
+diff --git i/src/managers/screenshare/ScreenshareSession.cpp w/src/managers/screenshare/ScreenshareSession.cpp
+index cae2d4d..41754f4 100644
+--- i/src/managers/screenshare/ScreenshareSession.cpp
++++ w/src/managers/screenshare/ScreenshareSession.cpp
+@@ -167,8 +167,8 @@ PHLMONITOR CScreenshareSession::monitor() const {
+     return mon.expired() ? nullptr : mon.lock();
+ }
+ 
+-UP<CScreenshareFrame> CScreenshareSession::nextFrame(bool overlayCursor) {
+-    UP<CScreenshareFrame> frame = makeUnique<CScreenshareFrame>(m_self, overlayCursor, !m_sharing);
++UP<CScreenshareFrame> CScreenshareSession::nextFrame(bool overlayCursor, const Vector2D& maxSize) {
++    UP<CScreenshareFrame> frame = makeUnique<CScreenshareFrame>(m_self, overlayCursor, !m_sharing, maxSize);
+     frame->m_self               = frame;
+ 
+     Screenshare::mgr()->m_pendingFrames.emplace_back(frame);
+diff --git i/src/protocols/ToplevelExport.cpp w/src/protocols/ToplevelExport.cpp
+index 4539ca5..8dbf199 100644
+--- i/src/protocols/ToplevelExport.cpp
++++ w/src/protocols/ToplevelExport.cpp
+@@ -24,10 +24,15 @@ CToplevelExportClient::CToplevelExportClient(SP<CHyprlandToplevelExportManagerV1
+         captureToplevel(frame, overlayCursor, PROTO::foreignToplevelWlr->windowFromHandleResource(handle));
+     });
+ 
++    m_resource->setCaptureToplevelWithSize(
++        [this](CHyprlandToplevelExportManagerV1* pMgr, uint32_t frame, int32_t overlayCursor, wl_resource* handle, uint32_t maxWidth, uint32_t maxHeight) {
++            captureToplevel(frame, overlayCursor, PROTO::foreignToplevelWlr->windowFromHandleResource(handle), {sc<double>(maxWidth), sc<double>(maxHeight)});
++        });
++
+     m_savedClient = m_resource->client();
+ }
+ 
+-void CToplevelExportClient::captureToplevel(uint32_t frame, int32_t overlayCursor_, PHLWINDOW handle) {
++void CToplevelExportClient::captureToplevel(uint32_t frame, int32_t overlayCursor_, PHLWINDOW handle, const Vector2D& maxSize) {
+     if UNLIKELY (!handle) {
+         LOGM(Log::ERR, "Couldn't capture (window doesn't exist)");
+         return;
+@@ -37,7 +42,7 @@ void CToplevelExportClient::captureToplevel(uint32_t frame, int32_t overlayCurso
+ 
+     // create a frame
+     const auto FRAME = PROTO::toplevelExport->m_frames.emplace_back(
+-        makeShared<CToplevelExportFrame>(makeShared<CHyprlandToplevelExportFrameV1>(m_resource->client(), m_resource->version(), frame), session, !!overlayCursor_));
++        makeShared<CToplevelExportFrame>(makeShared<CHyprlandToplevelExportFrameV1>(m_resource->client(), m_resource->version(), frame), session, !!overlayCursor_, maxSize));
+ 
+     if UNLIKELY (!FRAME->good()) {
+         LOGM(Log::ERR, "Couldn't alloc frame for sharing! (no memory)");
+@@ -54,7 +59,7 @@ bool CToplevelExportClient::good() {
+     return m_resource && m_resource->resource();
+ }
+ 
+-CToplevelExportFrame::CToplevelExportFrame(SP<CHyprlandToplevelExportFrameV1> resource_, WP<CScreenshareSession> session, bool overlayCursor) :
++CToplevelExportFrame::CToplevelExportFrame(SP<CHyprlandToplevelExportFrameV1> resource_, WP<CScreenshareSession> session, bool overlayCursor, const Vector2D& maxSize) :
+     m_resource(resource_), m_session(session) {
+     if UNLIKELY (!good())
+         return;
+@@ -63,7 +68,7 @@ CToplevelExportFrame::CToplevelExportFrame(SP<CHyprlandToplevelExportFrameV1> re
+     m_resource->setDestroy([this](CHyprlandToplevelExportFrameV1* pFrame) { PROTO::toplevelExport->destroyResource(this); });
+     m_resource->setCopy([this](CHyprlandToplevelExportFrameV1* pFrame, wl_resource* res, int32_t ignoreDamage) { shareFrame(res, !!ignoreDamage); });
+ 
+-    m_frame = m_session->nextFrame(overlayCursor);
++    m_frame = m_session->nextFrame(overlayCursor, maxSize);
+ 
+     auto formats = m_session->allowedFormats();
+     if (formats.empty()) {
+diff --git i/src/protocols/ToplevelExport.hpp w/src/protocols/ToplevelExport.hpp
+index b1e614b..f3eba0f 100644
+--- i/src/protocols/ToplevelExport.hpp
++++ w/src/protocols/ToplevelExport.hpp
+@@ -26,14 +26,14 @@ class CToplevelExportClient {
+ 
+     wl_client*                           m_savedClient = nullptr;
+ 
+-    void                                 captureToplevel(uint32_t frame, int32_t overlayCursor, PHLWINDOW handle);
++    void                                 captureToplevel(uint32_t frame, int32_t overlayCursor, PHLWINDOW handle, const Vector2D& maxSize = {});
+ 
+     friend class CToplevelExportProtocol;
+ };
+ 
+ class CToplevelExportFrame {
+   public:
+-    CToplevelExportFrame(SP<CHyprlandToplevelExportFrameV1> resource, WP<Screenshare::CScreenshareSession> session, bool overlayCursor);
++    CToplevelExportFrame(SP<CHyprlandToplevelExportFrameV1> resource, WP<Screenshare::CScreenshareSession> session, bool overlayCursor, const Vector2D& maxSize);
+ 
+     bool good();
+ 
+diff --git i/src/render/OpenGL.cpp w/src/render/OpenGL.cpp
+index baee1ad..8c521cd 100644
+--- i/src/render/OpenGL.cpp
++++ w/src/render/OpenGL.cpp
+@@ -995,23 +995,26 @@ void CHyprOpenGLImpl::scissor(const CBox& originalBox, bool transform) {
+     // only call glScissor if the box has changed
+     static CBox m_lastScissorBox = {};
+ 
+-    if (transform) {
+-        CBox       box = originalBox;
+-        const auto TR  = Math::wlTransformToHyprutils(Math::invertTransform(m_renderData.pMonitor->m_transform));
++    CBox        box = originalBox;
++    if (m_renderData.projectionType == Render::RPT_EXPORT && m_renderData.currentFB && m_renderData.fbSize.x > 0 && m_renderData.fbSize.y > 0 &&
++        m_renderData.currentFB->m_size != m_renderData.fbSize) {
++        // Export projection describes the full source, while the viewport and
++        // framebuffer can be smaller. Clip in destination pixels, rounding
++        // outwards so fractional edges do not leave holes.
++        box.scale(m_renderData.currentFB->m_size / m_renderData.fbSize);
++        const auto right = std::ceil(box.x + box.w), bottom = std::ceil(box.y + box.h);
++        box.x = std::floor(box.x);
++        box.y = std::floor(box.y);
++        box.w = right - box.x;
++        box.h = bottom - box.y;
++    } else if (transform) {
++        const auto TR = Math::wlTransformToHyprutils(Math::invertTransform(m_renderData.pMonitor->m_transform));
+         box.transform(TR, m_renderData.pMonitor->m_transformedSize.x, m_renderData.pMonitor->m_transformedSize.y);
+-
+-        if (box != m_lastScissorBox) {
+-            GLCALL(glScissor(box.x, box.y, box.width, box.height));
+-            m_lastScissorBox = box;
+-        }
+-
+-        setCapStatus(GL_SCISSOR_TEST, true);
+-        return;
+     }
+ 
+-    if (originalBox != m_lastScissorBox) {
+-        GLCALL(glScissor(originalBox.x, originalBox.y, originalBox.width, originalBox.height));
+-        m_lastScissorBox = originalBox;
++    if (box != m_lastScissorBox) {
++        GLCALL(glScissor(box.x, box.y, box.width, box.height));
++        m_lastScissorBox = box;
+     }
+ 
+     setCapStatus(GL_SCISSOR_TEST, true);
+diff --git i/src/render/pass/Pass.cpp w/src/render/pass/Pass.cpp
+index 8675aae..f561d42 100644
+--- i/src/render/pass/Pass.cpp
++++ w/src/render/pass/Pass.cpp
+@@ -34,7 +34,10 @@ void CRenderPass::simplify(bool willBlur, const CRegion& liveBlurRegion) {
+ 
+     // TODO: use precompute blur for instances where there is nothing in between
+ 
+-    CRegion newDamage = m_damage.copy().intersect(CBox{{}, pMonitor->m_transformedSize});
++    // A window export is projected in source pixels and can be larger than
++    // its monitor (especially after rotation). Do not clip it to the output.
++    const auto clipSize  = g_pHyprRenderer->m_renderData.projectionType == RPT_EXPORT ? g_pHyprRenderer->m_renderData.fbSize : pMonitor->m_transformedSize;
++    CRegion    newDamage = m_damage.copy().intersect(CBox{{}, clipSize});
+     for (auto& el : m_passElements | std::views::reverse) {
+ 
+         if (newDamage.empty() && !el.element->undiscardable()) {

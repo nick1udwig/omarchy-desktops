@@ -121,6 +121,34 @@ to clean it up promptly.
 
 ### Remaining opportunities
 
+The [isolated compositor-side scaling experiment](../experiments/scaled-capture/README.md)
+now demonstrates smaller native exports without modifying Quickshell. Across
+two capture-size orders, 64 synthetic 2560×1440 windows reached a complete preview
+frame in a combined median 236.5 ms at native capture resolution versus 96.5 ms
+at 320×180. All 96 performance samples retained the rendered-before-reveal gate
+with zero missing previews. The prototype is not installed; production use needs
+per-client size negotiation. These are isolated cold-capture measurements, not
+the cached, three-output opening measurements above or a 400 MHz test.
+
+The [per-request integration draft](../experiments/sized-capture/README.md) now
+implements that negotiation across hyprland-protocols, Hyprland, and Quickshell.
+The overview requests its largest consumer's physical texture bounds while
+keeping the GPU-readiness gate. Concurrent native and scaled captures remain
+independent, existing clients retain native exports, and the new client falls
+back on older compositors. Validation also found and fixed monitor-bound clipping
+of oversized window exports and rotated clearing of transparent capture buffers.
+
+With the finished patch, all CPUs reported approximately 400 MHz at the start
+and end of all 36 cold samples. Median first-complete-frame time fell from
+664 to 261 ms for 32 windows and from 1,235.5 to 506 ms for 64 windows; the latter
+combines opposite size orders. Every reveal had zero missing previews. Retained
+reopenings required 0 ms capture preparation and had an 11.5 ms median Qt
+frame-swap callback for 64 windows. These are isolated single-output measurements
+of an observed throttled state, not continuously controlled frequency or physical
+keypress-to-display latency. Cold zero latency remains unmet. The draft protocol
+requires upstream agreement before shipping; the desktop executables have not
+been replaced.
+
 Cold native-size compositor exports and texture preparation now dominate the
 slow path. Investigate compositor-side downscaling/shared thumbnails and
 completion-driven startup scheduling, preserving the rendered-before-reveal

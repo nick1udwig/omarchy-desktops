@@ -53,6 +53,11 @@ Item {
 
   function refresh() {
     if (!captureEnabled) return false
+    // Draft Quickshell API: ask the compositor to render directly at the
+    // largest consumer's physical texture size. Stock Quickshell keeps its
+    // native-resolution path. Apply only when requesting a frame, so layout
+    // animation cannot create an extra stream of capture requests.
+    if (copy.captureSize !== undefined) copy.captureSize = texture.textureSize
     if (copy.captureSource !== source) { copy.captureSource = source; return true }
     if (!copy.hasContent) return false
     copy.captureFrame()

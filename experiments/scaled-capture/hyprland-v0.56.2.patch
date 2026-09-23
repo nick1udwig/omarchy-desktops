@@ -1,0 +1,111 @@
+diff --git i/src/managers/screenshare/ScreenshareFrame.cpp w/src/managers/screenshare/ScreenshareFrame.cpp
+index c74adcb..d92204a 100644
+--- i/src/managers/screenshare/ScreenshareFrame.cpp
++++ w/src/managers/screenshare/ScreenshareFrame.cpp
+@@ -323,7 +323,13 @@ void CScreenshareFrame::renderWindow() {
+     const auto NOW = Time::steadyNow();
+ 
+     // TODO: implement a monitor independent render mode to buffer that does this in CHyprRenderer::begin() or something like that
+-    g_pHyprRenderer->m_renderData.fbSize = m_bufferSize;
++    // Keep window geometry/damage in source pixels; the smaller viewport does
++    // the downsampling while drawing directly into the client's capture buffer.
++    // OpenGL::scissor converts source-pixel clips to destination pixels below.
++    const auto sourceSize                = (PWINDOW->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT) * PMONITOR->m_scale).round();
++    g_pHyprRenderer->m_renderData.fbSize = sourceSize;
++    if (sourceSize != m_bufferSize)
++        g_pHyprRenderer->setDamage(CRegion{0, 0, sourceSize.x, sourceSize.y}, std::nullopt);
+     g_pHyprRenderer->setProjectionType(Render::RPT_EXPORT);
+     g_pHyprRenderer->m_renderData.transformDamage = false;
+     g_pHyprRenderer->setViewport(0, 0, m_bufferSize.x, m_bufferSize.y);
+diff --git i/src/managers/screenshare/ScreenshareSession.cpp w/src/managers/screenshare/ScreenshareSession.cpp
+index cae2d4d..b8d65aa 100644
+--- i/src/managers/screenshare/ScreenshareSession.cpp
++++ w/src/managers/screenshare/ScreenshareSession.cpp
+@@ -5,9 +5,31 @@
+ #include "../EventManager.hpp"
+ #include "../eventLoop/EventLoopManager.hpp"
+ #include "../../event/EventBus.hpp"
++#include <cstdlib>
++#include <cmath>
++#include <string_view>
+ 
+ using namespace Screenshare;
+ 
++// Experiment only: affects all window captures in this compositor process.
++// Run in a disposable nested compositor, never in the desktop session.
++static int thumbnailDivisor() {
++    static const int divisor = []() {
++        const char* value = std::getenv("OMARCHY_CAPTURE_DIVISOR");
++        if (!value)
++            return 1;
++        const std::string_view text{value};
++        if (text == "2")
++            return 2;
++        if (text == "4")
++            return 4;
++        if (text == "8")
++            return 8;
++        return 1;
++    }();
++    return divisor;
++}
++
+ CScreenshareSession::CScreenshareSession(PHLMONITOR monitor, wl_client* client) : m_type(SHARE_MONITOR), m_monitor(monitor), m_client(client) {
+     if UNLIKELY (!m_monitor)
+         return;
+@@ -118,7 +140,9 @@ void CScreenshareSession::calculateConstraints() {
+             break;
+         case SHARE_WINDOW:
+             m_bufferSize = (m_window->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT) * PMONITOR->m_scale).round();
+-            m_name       = m_window->m_title;
++            if (m_bufferSize.x > 0 && m_bufferSize.y > 0)
++                m_bufferSize = {std::ceil(m_bufferSize.x / thumbnailDivisor()), std::ceil(m_bufferSize.y / thumbnailDivisor())};
++            m_name = m_window->m_title;
+             break;
+         case SHARE_REGION:
+             m_bufferSize = PMONITOR->m_transform % 2 == 0 ? m_captureBox.size() : Vector2D{m_captureBox.h, m_captureBox.w};
+diff --git i/src/render/OpenGL.cpp w/src/render/OpenGL.cpp
+index baee1ad..8c521cd 100644
+--- i/src/render/OpenGL.cpp
++++ w/src/render/OpenGL.cpp
+@@ -995,23 +995,26 @@ void CHyprOpenGLImpl::scissor(const CBox& originalBox, bool transform) {
+     // only call glScissor if the box has changed
+     static CBox m_lastScissorBox = {};
+ 
+-    if (transform) {
+-        CBox       box = originalBox;
+-        const auto TR  = Math::wlTransformToHyprutils(Math::invertTransform(m_renderData.pMonitor->m_transform));
++    CBox        box = originalBox;
++    if (m_renderData.projectionType == Render::RPT_EXPORT && m_renderData.currentFB && m_renderData.fbSize.x > 0 && m_renderData.fbSize.y > 0 &&
++        m_renderData.currentFB->m_size != m_renderData.fbSize) {
++        // Export projection describes the full source, while the viewport and
++        // framebuffer can be smaller. Clip in destination pixels, rounding
++        // outwards so fractional edges do not leave holes.
++        box.scale(m_renderData.currentFB->m_size / m_renderData.fbSize);
++        const auto right = std::ceil(box.x + box.w), bottom = std::ceil(box.y + box.h);
++        box.x = std::floor(box.x);
++        box.y = std::floor(box.y);
++        box.w = right - box.x;
++        box.h = bottom - box.y;
++    } else if (transform) {
++        const auto TR = Math::wlTransformToHyprutils(Math::invertTransform(m_renderData.pMonitor->m_transform));
+         box.transform(TR, m_renderData.pMonitor->m_transformedSize.x, m_renderData.pMonitor->m_transformedSize.y);
+-
+-        if (box != m_lastScissorBox) {
+-            GLCALL(glScissor(box.x, box.y, box.width, box.height));
+-            m_lastScissorBox = box;
+-        }
+-
+-        setCapStatus(GL_SCISSOR_TEST, true);
+-        return;
+     }
+ 
+-    if (originalBox != m_lastScissorBox) {
+-        GLCALL(glScissor(originalBox.x, originalBox.y, originalBox.width, originalBox.height));
+-        m_lastScissorBox = originalBox;
++    if (box != m_lastScissorBox) {
++        GLCALL(glScissor(box.x, box.y, box.width, box.height));
++        m_lastScissorBox = box;
+     }
+ 
+     setCapStatus(GL_SCISSOR_TEST, true);

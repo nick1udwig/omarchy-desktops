@@ -1,0 +1,19 @@
+{
+  "hyprland_revision": "efb50993780079460b0cbed1363e2166a2de1d9f",
+  "protocols_revision": "bd153e76f751f150a09328dbdeb5e4fab9d23622",
+  "quickshell_revision": "1a4716cde794a59928d9d9fc15f2afc7a95de360",
+  "qt_version": "6.11.2",
+  "build_type": "Release",
+  "quickshell_crash_handler": false,
+  "quickshell_build_testing": true,
+  "repository_checks_passed": 255,
+  "capture_validation_cases_passed": 11,
+  "quickshell_test_executables_passed": 8,
+  "quickshell_test_executables_total": 9,
+  "quickshell_test_failure": "popupwindow::moveWithParent, x actual 12 expected 20, offscreen and minimal Qt platforms",
+  "patch_sha256": {
+    "hyprland-protocols.patch": "820607cf7807c002d3e8c2d3ea43cda6de60b91dc1c3b3ce9f2335b1ee1ce785",
+    "hyprland-v0.56.2.patch": "835def0ccdf588b938811d73d5c7fa8cb6574e8fc224303413d4096a47d7eb12",
+    "quickshell-v0.3.1.patch": "134d99fc21e9be9e4e38bb3ba72482d22f9b988fe38cd9fa1cb6da3f7bbaa9c4"
+  }
+}

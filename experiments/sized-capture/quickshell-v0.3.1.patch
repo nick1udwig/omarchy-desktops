@@ -1,0 +1,250 @@
+diff --git i/src/wayland/screencopy/hyprland_screencopy/hyprland-toplevel-export-v1.xml w/src/wayland/screencopy/hyprland_screencopy/hyprland-toplevel-export-v1.xml
+index b1185aa..f09b95e 100644
+--- i/src/wayland/screencopy/hyprland_screencopy/hyprland-toplevel-export-v1.xml
++++ w/src/wayland/screencopy/hyprland_screencopy/hyprland-toplevel-export-v1.xml
+@@ -37,7 +37,7 @@
+     Particularly useful for sharing a single window.
+   </description>
+ 
+-  <interface name="hyprland_toplevel_export_manager_v1" version="2">
++  <interface name="hyprland_toplevel_export_manager_v1" version="3">
+     <description summary="manager to inform clients and begin capturing">
+       This object is a manager which offers requests to start capturing from a
+       source.
+@@ -80,9 +80,33 @@
+       <arg name="handle" type="object" interface="zwlr_foreign_toplevel_handle_v1" allow-null="false" summary="the zwlr_foreign_toplevel_handle_v1 handle of the toplevel to be captured"/>
+     </request>
+     <!-- End Version 2 -->
++
++    <!-- Draft version 3: not an upstream-assigned interface version. -->
++    <request name="capture_toplevel_with_size" since="3">
++      <description summary="capture a toplevel within pixel bounds">
++        Same as capture_toplevel_with_wlr_toplevel_handle, with maximum buffer
++        width and height in physical pixels. Zero means unconstrained on that
++        axis; zero on both axes requests the native size.
++
++        The compositor fits the entire native image within these bounds,
++        preserving its aspect ratio to integer-pixel precision, without
++        upscaling. Each dimension is at least one pixel. The buffer events
++        advertise the actual required size; clients must use that size.
++
++        Bounds apply only to this frame. They do not affect other frames,
++        clients, or the source window. Damage and cursor coordinates are in
++        the resulting buffer's coordinate space. Existing capture requests
++        continue to request native resolution.
++      </description>
++      <arg name="frame" type="new_id" interface="hyprland_toplevel_export_frame_v1"/>
++      <arg name="overlay_cursor" type="int" summary="composite cursor onto the frame"/>
++      <arg name="handle" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
++      <arg name="max_width" type="uint" summary="maximum width in buffer pixels, or zero"/>
++      <arg name="max_height" type="uint" summary="maximum height in buffer pixels, or zero"/>
++    </request>
+   </interface>
+ 
+-  <interface name="hyprland_toplevel_export_frame_v1" version="2">
++  <interface name="hyprland_toplevel_export_frame_v1" version="3">
+     <description summary="a frame ready for copy">
+       This object represents a single frame.
+ 
+diff --git i/src/wayland/screencopy/hyprland_screencopy/hyprland_screencopy.cpp w/src/wayland/screencopy/hyprland_screencopy/hyprland_screencopy.cpp
+index 678c000..72b1b6b 100644
+--- i/src/wayland/screencopy/hyprland_screencopy/hyprland_screencopy.cpp
++++ w/src/wayland/screencopy/hyprland_screencopy/hyprland_screencopy.cpp
+@@ -19,7 +19,7 @@ namespace {
+ QS_LOGGING_CATEGORY(logScreencopy, "quickshell.wayland.screencopy.hyprland", QtWarningMsg);
+ }
+ 
+-HyprlandScreencopyManager::HyprlandScreencopyManager(): QWaylandClientExtensionTemplate(2) {
++HyprlandScreencopyManager::HyprlandScreencopyManager(): QWaylandClientExtensionTemplate(3) {
+ 	this->initialize();
+ }
+ 
+@@ -66,10 +66,22 @@ void HyprlandScreencopyContext::captureFrame() {
+ 
+ 	this->request.reset();
+ 
+-	this->init(this->manager->capture_toplevel_with_wlr_toplevel_handle(
+-	    this->paintCursors ? 1 : 0,
+-	    this->handle->object()
+-	));
++	this->frameCaptureSize = this->mCaptureSize;
++	if (this->manager->QWaylandClientExtension::version() >= 3
++	    && (this->frameCaptureSize.width() > 0 || this->frameCaptureSize.height() > 0))
++	{
++		this->init(this->manager->capture_toplevel_with_size(
++		    this->paintCursors ? 1 : 0,
++		    this->handle->object(),
++		    this->frameCaptureSize.width(),
++		    this->frameCaptureSize.height()
++		));
++	} else {
++		this->init(this->manager->capture_toplevel_with_wlr_toplevel_handle(
++		    this->paintCursors ? 1 : 0,
++		    this->handle->object()
++		));
++	}
+ }
+ 
+ void HyprlandScreencopyContext::hyprland_toplevel_export_frame_v1_buffer(
+@@ -78,7 +90,7 @@ void HyprlandScreencopyContext::hyprland_toplevel_export_frame_v1_buffer(
+     uint32_t height,
+     uint32_t /*stride*/
+ ) {
+-	// While different sizes can technically be requested, that would be insane.
++	// All advertised buffer types for this frame use the negotiated size.
+ 	this->request.width = width;
+ 	this->request.height = height;
+ 	this->request.shm.formats.push(format);
+@@ -89,7 +101,7 @@ void HyprlandScreencopyContext::hyprland_toplevel_export_frame_v1_linux_dmabuf(
+     uint32_t width,
+     uint32_t height
+ ) {
+-	// While different sizes can technically be requested, that would be insane.
++	// All advertised buffer types for this frame use the negotiated size.
+ 	this->request.width = width;
+ 	this->request.height = height;
+ 	this->request.dmabuf.formats.push(format);
+@@ -113,7 +125,11 @@ void HyprlandScreencopyContext::hyprland_toplevel_export_frame_v1_buffer_done()
+ 		return;
+ 	}
+ 
+-	this->copy(backbuffer->buffer(), this->copiedFirstFrame ? 0 : 1);
++	// A new size needs a frame even when the source has no fresh damage.
++	this->copy(
++	    backbuffer->buffer(),
++	    this->copiedFirstFrame && this->frameCaptureSize == this->lastCaptureSize ? 0 : 1
++	);
+ }
+ 
+ void HyprlandScreencopyContext::hyprland_toplevel_export_frame_v1_ready(
+@@ -123,6 +139,7 @@ void HyprlandScreencopyContext::hyprland_toplevel_export_frame_v1_ready(
+ ) {
+ 	this->destroy();
+ 	this->copiedFirstFrame = true;
++	this->lastCaptureSize = this->frameCaptureSize;
+ 	this->mSwapchain.swapBuffers();
+ 	emit this->frameCaptured();
+ }
+diff --git i/src/wayland/screencopy/hyprland_screencopy/hyprland_screencopy_p.hpp w/src/wayland/screencopy/hyprland_screencopy/hyprland_screencopy_p.hpp
+index b3f588e..e916f58 100644
+--- i/src/wayland/screencopy/hyprland_screencopy/hyprland_screencopy_p.hpp
++++ w/src/wayland/screencopy/hyprland_screencopy/hyprland_screencopy_p.hpp
+@@ -42,6 +42,8 @@ private:
+ 	HyprlandScreencopyManager* manager;
+ 	buffer::WlBufferRequest request;
+ 	bool copiedFirstFrame = false;
++	QSize frameCaptureSize = QSize(0, 0);
++	QSize lastCaptureSize = QSize(0, 0);
+ 
+ 	toplevel::wlr::ToplevelHandle* handle;
+ 	bool paintCursors;
+diff --git i/src/wayland/screencopy/manager.hpp w/src/wayland/screencopy/manager.hpp
+index f58e005..c31b24d 100644
+--- i/src/wayland/screencopy/manager.hpp
++++ w/src/wayland/screencopy/manager.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include <qobject.h>
++#include <qsize.h>
+ #include <qtclasshelpermacros.h>
+ #include <qtmetamacros.h>
+ 
+@@ -14,6 +15,8 @@ class ScreencopyContext: public QObject {
+ public:
+ 	[[nodiscard]] buffer::WlBufferSwapchain& swapchain() { return this->mSwapchain; }
+ 	virtual void captureFrame() = 0;
++	// Applies to future frames only; an outstanding request keeps its bounds.
++	void setCaptureSize(const QSize& size) { this->mCaptureSize = size; }
+ 
+ signals:
+ 	void frameCaptured();
+@@ -23,6 +26,7 @@ protected:
+ 	ScreencopyContext() = default;
+ 
+ 	buffer::WlBufferSwapchain mSwapchain;
++	QSize mCaptureSize = QSize(0, 0);
+ };
+ 
+ class ScreencopyManager {
+diff --git i/src/wayland/screencopy/view.cpp w/src/wayland/screencopy/view.cpp
+index b456aac..98ef57d 100644
+--- i/src/wayland/screencopy/view.cpp
++++ w/src/wayland/screencopy/view.cpp
+@@ -64,6 +64,14 @@ void ScreencopyView::setPaintCursors(bool paintCursors) {
+ 	emit this->paintCursorsChanged();
+ }
+ 
++void ScreencopyView::setCaptureSize(const QSize& size) {
++	const QSize normalized(qMax(0, size.width()), qMax(0, size.height()));
++	if (normalized == this->mCaptureSize) return;
++	this->mCaptureSize = normalized;
++	if (this->context) this->context->setCaptureSize(normalized);
++	emit this->captureSizeChanged();
++}
++
+ void ScreencopyView::setLive(bool live) {
+ 	if (live == this->mLive) return;
+ 
+@@ -85,6 +93,7 @@ void ScreencopyView::createContext() {
+ 	}
+ 
+ 	this->context->setParent(this);
++	this->context->setCaptureSize(this->mCaptureSize);
+ 
+ 	QObject::connect(
+ 	    this->context,
+@@ -128,6 +137,7 @@ void ScreencopyView::onFrameCaptured() {
+ 
+ 	this->bSourceSize = size;
+ 	this->bHasContent = true;
++	emit this->frameCaptured();
+ }
+ 
+ void ScreencopyView::componentComplete() {
+diff --git i/src/wayland/screencopy/view.hpp w/src/wayland/screencopy/view.hpp
+index d2b304e..644cb6a 100644
+--- i/src/wayland/screencopy/view.hpp
++++ w/src/wayland/screencopy/view.hpp
+@@ -28,6 +28,13 @@ class ScreencopyView: public QQuickItem {
+ 	Q_PROPERTY(QObject* captureSource READ captureSource WRITE setCaptureSource NOTIFY captureSourceChanged);
+ 	/// If true, the system cursor will be painted on the image. Defaults to false.
+ 	Q_PROPERTY(bool paintCursor READ paintCursors WRITE setPaintCursors NOTIFY paintCursorsChanged);
++	/// Maximum capture buffer size in physical pixels, preserving aspect ratio.
++	/// Zero on either axis leaves that axis unconstrained. Defaults to (0, 0),
++	/// the native size. Negative dimensions are clamped to zero.
++	/// Applied to the next frame requested; existing content remains available.
++	/// This is a hint: unsupported backends/compositors capture at native size.
++	/// Currently supported by the draft Hyprland toplevel export v3 extension.
++	Q_PROPERTY(QSize captureSize READ captureSize WRITE setCaptureSize NOTIFY captureSizeChanged);
+ 	/// If true, a live video feed from the capture source will be displayed instead of a still image.
+ 	/// Defaults to false.
+ 	Q_PROPERTY(bool live READ live WRITE setLive NOTIFY liveChanged);
+@@ -55,6 +62,9 @@ public:
+ 	[[nodiscard]] bool paintCursors() const { return this->mPaintCursors; }
+ 	void setPaintCursors(bool paintCursors);
+ 
++	[[nodiscard]] QSize captureSize() const { return this->mCaptureSize; }
++	void setCaptureSize(const QSize& size);
++
+ 	[[nodiscard]] bool live() const { return this->mLive; }
+ 	void setLive(bool live);
+ 
+@@ -66,6 +76,9 @@ signals:
+ 	/// The compositor has ended the video stream. Attempting to restart it may or may not work.
+ 	void stopped();
+ 
++	/// A new frame is available. GPU import still occurs in the render pass.
++	void frameCaptured();
++	void captureSizeChanged();
+ 	void captureSourceChanged();
+ 	void paintCursorsChanged();
+ 	void liveChanged();
+@@ -97,6 +110,7 @@ private:
+ 	QObject* mCaptureSource = nullptr;
+ 	bool mPaintCursors = false;
+ 	bool mLive = false;
++	QSize mCaptureSize = QSize(0, 0);
+ 	ScreencopyContext* context = nullptr;
+ 	bool completed = false;
+ };

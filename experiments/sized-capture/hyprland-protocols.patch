@@ -1,0 +1,48 @@
+diff --git i/protocols/hyprland-toplevel-export-v1.xml w/protocols/hyprland-toplevel-export-v1.xml
+index b1185aa..f09b95e 100644
+--- i/protocols/hyprland-toplevel-export-v1.xml
++++ w/protocols/hyprland-toplevel-export-v1.xml
+@@ -37,7 +37,7 @@
+     Particularly useful for sharing a single window.
+   </description>
+ 
+-  <interface name="hyprland_toplevel_export_manager_v1" version="2">
++  <interface name="hyprland_toplevel_export_manager_v1" version="3">
+     <description summary="manager to inform clients and begin capturing">
+       This object is a manager which offers requests to start capturing from a
+       source.
+@@ -80,9 +80,33 @@
+       <arg name="handle" type="object" interface="zwlr_foreign_toplevel_handle_v1" allow-null="false" summary="the zwlr_foreign_toplevel_handle_v1 handle of the toplevel to be captured"/>
+     </request>
+     <!-- End Version 2 -->
++
++    <!-- Draft version 3: not an upstream-assigned interface version. -->
++    <request name="capture_toplevel_with_size" since="3">
++      <description summary="capture a toplevel within pixel bounds">
++        Same as capture_toplevel_with_wlr_toplevel_handle, with maximum buffer
++        width and height in physical pixels. Zero means unconstrained on that
++        axis; zero on both axes requests the native size.
++
++        The compositor fits the entire native image within these bounds,
++        preserving its aspect ratio to integer-pixel precision, without
++        upscaling. Each dimension is at least one pixel. The buffer events
++        advertise the actual required size; clients must use that size.
++
++        Bounds apply only to this frame. They do not affect other frames,
++        clients, or the source window. Damage and cursor coordinates are in
++        the resulting buffer's coordinate space. Existing capture requests
++        continue to request native resolution.
++      </description>
++      <arg name="frame" type="new_id" interface="hyprland_toplevel_export_frame_v1"/>
++      <arg name="overlay_cursor" type="int" summary="composite cursor onto the frame"/>
++      <arg name="handle" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
++      <arg name="max_width" type="uint" summary="maximum width in buffer pixels, or zero"/>
++      <arg name="max_height" type="uint" summary="maximum height in buffer pixels, or zero"/>
++    </request>
+   </interface>
+ 
+-  <interface name="hyprland_toplevel_export_frame_v1" version="2">
++  <interface name="hyprland_toplevel_export_frame_v1" version="3">
+     <description summary="a frame ready for copy">
+       This object represents a single frame.
+ 

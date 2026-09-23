@@ -1,0 +1,1172 @@
+[
+  {
+    "case": "alpha",
+    "results": [
+      {
+        "candidates": 1,
+        "probes": [
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 3,
+            "drops": 0
+          },
+          {
+            "size": [
+              320,
+              180
+            ],
+            "frames": 7,
+            "drops": 0
+          },
+          {
+            "size": [
+              640,
+              360
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              227,
+              128
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              128,
+              72
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              1,
+              1
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              307,
+              173
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 1,
+            "drops": 0
+          }
+        ],
+        "api": true,
+        "legacy_server": false,
+        "native": [
+          4096,
+          2304
+        ],
+        "image_checked": true,
+        "transparent": true,
+        "source_closed_cleanly": true
+      }
+    ]
+  },
+  {
+    "case": "alpha-shm",
+    "results": [
+      {
+        "candidates": 1,
+        "probes": [
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 3,
+            "drops": 0
+          },
+          {
+            "size": [
+              320,
+              180
+            ],
+            "frames": 7,
+            "drops": 0
+          },
+          {
+            "size": [
+              640,
+              360
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              227,
+              128
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              128,
+              72
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              1,
+              1
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              307,
+              173
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 1,
+            "drops": 0
+          }
+        ],
+        "api": true,
+        "legacy_server": false,
+        "native": [
+          4096,
+          2304
+        ],
+        "image_checked": true,
+        "transparent": true,
+        "source_closed_cleanly": true
+      }
+    ]
+  },
+  {
+    "case": "api",
+    "results": [
+      {
+        "candidates": 1,
+        "probes": [
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              320,
+              180
+            ],
+            "frames": 5,
+            "drops": 0
+          },
+          {
+            "size": [
+              640,
+              360
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              227,
+              128
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              128,
+              72
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              1,
+              1
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              307,
+              173
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          }
+        ],
+        "api": true,
+        "legacy_server": false,
+        "native": [
+          2560,
+          1440
+        ],
+        "image_checked": true,
+        "transparent": false,
+        "source_closed_cleanly": true
+      }
+    ]
+  },
+  {
+    "case": "api-shm",
+    "results": [
+      {
+        "candidates": 1,
+        "probes": [
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              320,
+              180
+            ],
+            "frames": 5,
+            "drops": 0
+          },
+          {
+            "size": [
+              640,
+              360
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              227,
+              128
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              128,
+              72
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              1,
+              1
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              307,
+              173
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          }
+        ],
+        "api": true,
+        "legacy_server": false,
+        "native": [
+          2560,
+          1440
+        ],
+        "image_checked": true,
+        "transparent": false,
+        "source_closed_cleanly": true
+      }
+    ]
+  },
+  {
+    "case": "fractional",
+    "results": [
+      {
+        "divisor": 1,
+        "windows": 1,
+        "run": 0,
+        "scale": 1.6,
+        "transform": 1,
+        "forced_shm": false,
+        "trace": false,
+        "subsurface": false,
+        "transparent": false,
+        "preparation_ms": 41,
+        "first_complete_frame_ms": 55,
+        "hyprland_cpu_ms": 10.0,
+        "quickshell_cpu_ms": 40.0,
+        "capture_size": [
+          640,
+          360
+        ],
+        "single_buffer_bytes": 921600,
+        "consumer_pixel_ratio": 2,
+        "cpu_frequency_before_khz": [
+          1499539,
+          400000,
+          2599573,
+          400000,
+          1392871,
+          400000,
+          400000,
+          400000,
+          3540783,
+          3501706,
+          400000,
+          400000,
+          2427898,
+          545633,
+          2603801,
+          628393,
+          3696647,
+          400000,
+          731994,
+          1958910
+        ],
+        "cpu_frequency_after_khz": [
+          3819553,
+          400000,
+          1772186,
+          2249784,
+          2357748,
+          555893,
+          400000,
+          3081464,
+          463375,
+          400000,
+          400000,
+          400000,
+          2203993,
+          1127014,
+          3043876,
+          400000,
+          2171799,
+          400000,
+          2851775,
+          2002356
+        ],
+        "missing_at_reveal": 0,
+        "image_checked": true
+      },
+      {
+        "divisor": 1,
+        "windows": 1,
+        "run": 1,
+        "scale": 1.6,
+        "transform": 1,
+        "forced_shm": false,
+        "trace": false,
+        "subsurface": false,
+        "transparent": false,
+        "preparation_ms": 32,
+        "first_complete_frame_ms": 47,
+        "hyprland_cpu_ms": 0.0,
+        "quickshell_cpu_ms": 10.0,
+        "capture_size": [
+          640,
+          360
+        ],
+        "single_buffer_bytes": 921600,
+        "consumer_pixel_ratio": 2,
+        "cpu_frequency_before_khz": [
+          1102439,
+          2192879,
+          2674568,
+          400000,
+          2859776,
+          905717,
+          3100218,
+          2359338,
+          841304,
+          400000,
+          2214570,
+          400000,
+          2522599,
+          400000,
+          608249,
+          400000,
+          3865880,
+          400000,
+          2676060,
+          3804166
+        ],
+        "cpu_frequency_after_khz": [
+          826515,
+          562670,
+          2721753,
+          400000,
+          3604268,
+          3600031,
+          3598155,
+          3563623,
+          784884,
+          400000,
+          400000,
+          400000,
+          2779826,
+          400000,
+          3246637,
+          462259,
+          1940579,
+          400000,
+          887702,
+          2104218
+        ],
+        "missing_at_reveal": 0
+      }
+    ]
+  },
+  {
+    "case": "fractional-api",
+    "results": [
+      {
+        "candidates": 1,
+        "probes": [
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              320,
+              180
+            ],
+            "frames": 5,
+            "drops": 0
+          },
+          {
+            "size": [
+              640,
+              360
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              227,
+              128
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              128,
+              72
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              1,
+              1
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              307,
+              173
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              4096,
+              2304
+            ],
+            "frames": 1,
+            "drops": 0
+          }
+        ],
+        "api": true,
+        "legacy_server": false,
+        "native": [
+          4096,
+          2304
+        ],
+        "image_checked": true,
+        "transparent": false,
+        "source_closed_cleanly": true
+      }
+    ]
+  },
+  {
+    "case": "legacy-client",
+    "results": [
+      {
+        "divisor": 1,
+        "windows": 1,
+        "run": 0,
+        "scale": 1,
+        "transform": 0,
+        "forced_shm": false,
+        "trace": false,
+        "subsurface": false,
+        "transparent": false,
+        "preparation_ms": 48,
+        "first_complete_frame_ms": 58,
+        "hyprland_cpu_ms": 0.0,
+        "quickshell_cpu_ms": 30.0,
+        "capture_size": [
+          2560,
+          1440
+        ],
+        "single_buffer_bytes": 14745600,
+        "consumer_pixel_ratio": 1,
+        "cpu_frequency_before_khz": [
+          2527674,
+          3200048,
+          3266341,
+          1249101,
+          2599346,
+          2598154,
+          2599872,
+          2600123,
+          2599888,
+          2600017,
+          2599988,
+          2600006,
+          611906,
+          486362,
+          719743,
+          3200000,
+          2479585,
+          3107616,
+          3200000,
+          3300050
+        ],
+        "cpu_frequency_after_khz": [
+          1904930,
+          1847476,
+          3499964,
+          989809,
+          2700057,
+          2700144,
+          2402980,
+          2700099,
+          2504755,
+          2407744,
+          2674595,
+          2582980,
+          1220394,
+          3288754,
+          3500000,
+          3500000,
+          3408743,
+          3417467,
+          3374848,
+          1091941
+        ],
+        "missing_at_reveal": 0,
+        "image_checked": true
+      }
+    ]
+  },
+  {
+    "case": "legacy-server",
+    "results": [
+      {
+        "candidates": 1,
+        "probes": [
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 5,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          },
+          {
+            "size": [
+              2560,
+              1440
+            ],
+            "frames": 1,
+            "drops": 0
+          }
+        ],
+        "api": true,
+        "legacy_server": true,
+        "native": [
+          2560,
+          1440
+        ],
+        "image_checked": true,
+        "transparent": false,
+        "source_closed_cleanly": true
+      }
+    ]
+  },
+  {
+    "case": "odd",
+    "results": [
+      {
+        "divisor": 8,
+        "windows": 1,
+        "run": 0,
+        "scale": 1,
+        "transform": 0,
+        "forced_shm": false,
+        "trace": false,
+        "subsurface": false,
+        "transparent": false,
+        "preparation_ms": 33,
+        "first_complete_frame_ms": 48,
+        "hyprland_cpu_ms": 0.0,
+        "quickshell_cpu_ms": 20.0,
+        "capture_size": [
+          160,
+          89
+        ],
+        "single_buffer_bytes": 56960,
+        "consumer_pixel_ratio": 1,
+        "cpu_frequency_before_khz": [
+          3616021,
+          3298845,
+          1127546,
+          3500000,
+          2706873,
+          2800739,
+          2799950,
+          2908952,
+          2799911,
+          2799960,
+          2736864,
+          618869,
+          3500000,
+          844585,
+          400178,
+          400000,
+          3449016,
+          575157,
+          2306270,
+          2486650
+        ],
+        "cpu_frequency_after_khz": [
+          1533642,
+          3500000,
+          3497830,
+          3500000,
+          2947549,
+          2840034,
+          2800405,
+          2996706,
+          2799959,
+          2800029,
+          2996211,
+          2800183,
+          3500000,
+          1297224,
+          698920,
+          3500000,
+          3300623,
+          2557151,
+          1217069,
+          3500039
+        ],
+        "missing_at_reveal": 0,
+        "image_checked": true
+      },
+      {
+        "divisor": 8,
+        "windows": 1,
+        "run": 1,
+        "scale": 1,
+        "transform": 0,
+        "forced_shm": false,
+        "trace": false,
+        "subsurface": false,
+        "transparent": false,
+        "preparation_ms": 42,
+        "first_complete_frame_ms": 51,
+        "hyprland_cpu_ms": 0.0,
+        "quickshell_cpu_ms": 10.0,
+        "capture_size": [
+          160,
+          89
+        ],
+        "single_buffer_bytes": 56960,
+        "consumer_pixel_ratio": 1,
+        "cpu_frequency_before_khz": [
+          3138023,
+          3492778,
+          400000,
+          401232,
+          2781350,
+          1640995,
+          2716231,
+          2752413,
+          2811171,
+          2802830,
+          3000087,
+          2803927,
+          3506079,
+          3010631,
+          3541206,
+          1088069,
+          3194471,
+          2475717,
+          3463345,
+          3104508
+        ],
+        "cpu_frequency_after_khz": [
+          3314840,
+          2937034,
+          422654,
+          3283473,
+          400240,
+          2887271,
+          1679959,
+          2818058,
+          3000565,
+          2831420,
+          2998934,
+          3000033,
+          3763474,
+          3500542,
+          3420608,
+          3536021,
+          399092,
+          3500000,
+          3500000,
+          3499964
+        ],
+        "missing_at_reveal": 0
+      }
+    ]
+  },
+  {
+    "case": "production",
+    "results": [
+      {
+        "divisor": 1,
+        "windows": 32,
+        "run": 0,
+        "scale": 1,
+        "transform": 0,
+        "forced_shm": false,
+        "trace": false,
+        "subsurface": false,
+        "transparent": false,
+        "preparation_ms": 65,
+        "first_complete_frame_ms": 74,
+        "hyprland_cpu_ms": 0.0,
+        "quickshell_cpu_ms": 40.0,
+        "capture_size": [
+          320,
+          180
+        ],
+        "single_buffer_bytes": 7372800,
+        "consumer_pixel_ratio": 1,
+        "cpu_frequency_before_khz": [
+          673005,
+          400000,
+          1779160,
+          1378312,
+          3564092,
+          400000,
+          762818,
+          400000,
+          400000,
+          400000,
+          3062770,
+          400000,
+          2703850,
+          582043,
+          400117,
+          400000,
+          3334736,
+          400000,
+          2660880,
+          4305437
+        ],
+        "cpu_frequency_after_khz": [
+          1070550,
+          400000,
+          1478092,
+          400000,
+          3503387,
+          3462958,
+          2059137,
+          3082051,
+          400000,
+          3500070,
+          725267,
+          400000,
+          2321593,
+          965897,
+          4031935,
+          400000,
+          866797,
+          400000,
+          400380,
+          400000
+        ],
+        "missing_at_reveal": 0,
+        "image_checked": true
+      },
+      {
+        "divisor": 1,
+        "windows": 32,
+        "run": 1,
+        "scale": 1,
+        "transform": 0,
+        "forced_shm": false,
+        "trace": false,
+        "subsurface": false,
+        "transparent": false,
+        "preparation_ms": 48,
+        "first_complete_frame_ms": 62,
+        "hyprland_cpu_ms": 0.0,
+        "quickshell_cpu_ms": 30.0,
+        "capture_size": [
+          320,
+          180
+        ],
+        "single_buffer_bytes": 7372800,
+        "consumer_pixel_ratio": 1,
+        "cpu_frequency_before_khz": [
+          1225857,
+          400000,
+          3578204,
+          3883368,
+          3199431,
+          3185181,
+          3203969,
+          3197715,
+          3203534,
+          3196476,
+          3073408,
+          3111985,
+          400000,
+          723569,
+          3138059,
+          400000,
+          1269525,
+          400000,
+          3210002,
+          748105
+        ],
+        "cpu_frequency_after_khz": [
+          899893,
+          400000,
+          560709,
+          2161712,
+          3572124,
+          3403714,
+          3393790,
+          3385697,
+          400000,
+          1302247,
+          1069562,
+          1571457,
+          2255264,
+          3101275,
+          476279,
+          400000,
+          2718363,
+          400000,
+          3737293,
+          805896
+        ],
+        "missing_at_reveal": 0
+      }
+    ]
+  },
+  {
+    "case": "subsurface",
+    "results": [
+      {
+        "divisor": 8,
+        "windows": 1,
+        "run": 0,
+        "scale": 1,
+        "transform": 0,
+        "forced_shm": false,
+        "trace": true,
+        "subsurface": true,
+        "transparent": false,
+        "preparation_ms": 40,
+        "first_complete_frame_ms": 47,
+        "hyprland_cpu_ms": 10.0,
+        "quickshell_cpu_ms": 30.0,
+        "capture_size": [
+          320,
+          180
+        ],
+        "single_buffer_bytes": 230400,
+        "consumer_pixel_ratio": 1,
+        "cpu_frequency_before_khz": [
+          3320624,
+          2970763,
+          3500000,
+          3542205,
+          2566511,
+          2697503,
+          2872435,
+          2999622,
+          2820818,
+          2825155,
+          2776010,
+          2935200,
+          3192250,
+          2752942,
+          3195888,
+          3475182,
+          3499899,
+          3265255,
+          3492137,
+          3540878
+        ],
+        "cpu_frequency_after_khz": [
+          2356207,
+          2897686,
+          3463448,
+          3500035,
+          2447039,
+          2691121,
+          2753001,
+          2752835,
+          2698556,
+          2699504,
+          2699884,
+          2700300,
+          1500117,
+          1471074,
+          3500036,
+          1570906,
+          3500000,
+          957365,
+          753215,
+          3244717
+        ],
+        "missing_at_reveal": 0,
+        "image_checked": true
+      },
+      {
+        "divisor": 8,
+        "windows": 1,
+        "run": 1,
+        "scale": 1,
+        "transform": 0,
+        "forced_shm": false,
+        "trace": true,
+        "subsurface": true,
+        "transparent": false,
+        "preparation_ms": 32,
+        "first_complete_frame_ms": 46,
+        "hyprland_cpu_ms": 20.0,
+        "quickshell_cpu_ms": 10.0,
+        "capture_size": [
+          320,
+          180
+        ],
+        "single_buffer_bytes": 230400,
+        "consumer_pixel_ratio": 1,
+        "cpu_frequency_before_khz": [
+          2634724,
+          2899962,
+          2900000,
+          2900028,
+          2400015,
+          2400030,
+          2400015,
+          2400016,
+          2290761,
+          2400187,
+          1654405,
+          2399992,
+          2876397,
+          2752544,
+          2809909,
+          2790589,
+          2846646,
+          2900102,
+          2900000,
+          2900000
+        ],
+        "cpu_frequency_after_khz": [
+          2799952,
+          2700000,
+          2700721,
+          2700015,
+          2292656,
+          2246875,
+          2017753,
+          1075574,
+          2300019,
+          2299771,
+          2299955,
+          2299804,
+          2800000,
+          2800028,
+          2157794,
+          2798593,
+          2606907,
+          1197502,
+          2504136,
+          574237
+        ],
+        "missing_at_reveal": 0
+      }
+    ]
+  }
+]
