@@ -36,12 +36,20 @@ Item {
     // Retain the last rectangle while filtered out, rather than moving to the origin.
     readonly property var packedRectSource: inLayout ? windowLayout[slot] : null
     property var packedRect: Qt.rect(0, 0, 1, 1)
+    property bool geometryInitialized: false
+    // Only Quick Look changes animate. Desktop switches and new windows should
+    // appear at their final rectangles, never grow from the initial 1x1 rect.
+    readonly property bool animatePreviewTransition: geometryInitialized && controller.motionSettled
+        && (controller.previewIndex >= 0 || controller.previewExitIndex >= 0)
     readonly property var layoutRect: previewed
         ? ExposeLayout.previewRectFor(modelData, layoutAreaWidth, layoutAreaHeight, Style.spacing.sm, controller.windowFooterHeight)
         : packedRect
 
     onPackedRectSourceChanged: if (packedRectSource) packedRect = packedRectSource
-    Component.onCompleted: if (packedRectSource) packedRect = packedRectSource
+    Component.onCompleted: {
+        if (packedRectSource) packedRect = packedRectSource
+        geometryInitialized = true
+    }
     visible: inLayout
     x: layoutRect.x
     y: layoutRect.y
@@ -156,12 +164,12 @@ Item {
         easing.type: card.controller.previewAnimationEasing
     }
 
-    Behavior on x { enabled: card.controller.motionSettled; CardAnimation {} }
-    Behavior on y { enabled: card.controller.motionSettled; CardAnimation {} }
-    Behavior on width { enabled: card.controller.motionSettled; CardAnimation {} }
-    Behavior on height { enabled: card.controller.motionSettled; CardAnimation {} }
+    Behavior on x { enabled: card.animatePreviewTransition; CardAnimation {} }
+    Behavior on y { enabled: card.animatePreviewTransition; CardAnimation {} }
+    Behavior on width { enabled: card.animatePreviewTransition; CardAnimation {} }
+    Behavior on height { enabled: card.animatePreviewTransition; CardAnimation {} }
     Behavior on opacity {
-        enabled: card.controller.motionSettled
+        enabled: card.animatePreviewTransition
         NumberAnimation { duration: card.controller.previewFadeDuration }
     }
 }
