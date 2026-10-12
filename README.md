@@ -1,7 +1,7 @@
 # Omarchy Desktops
 
 Virtual desktops with an Exposé-style overview for Omarchy.
-Each desktop has independent workspaces on every monitor; switching desktops switches all monitors together.
+Each desktop has one workspace on every monitor; switching desktops switches all monitors together.
 Based in part on [omarchy-expose](https://github.com/kristofferR/omarchy-expose).
 
 
@@ -42,32 +42,32 @@ omarchy restart shell
 
 ## Usage
 
-Your existing workspaces become Desktop 1 without moving their windows.
-The bar shows the current desktop and each monitor's local workspaces.
+The bar shows the current desktop. Each monitor shows its workspace for that desktop.
+When upgrading from the multi-workspace version, the selected workspace on each desktop and monitor is kept, and windows from its other workspaces move into it.
 
 | Shortcut | Action |
 | --- | --- |
 | `Super + D` | Toggle the overview |
+| `Super + Tab / Shift + Super + Tab` | Cycle through existing desktops |
 | `Ctrl + Super + Up / Down` | Previous / next desktop; stepping past an occupied end creates an empty desktop before wrapping |
-| `Ctrl + Shift + Super + Up / Down` | Move the focused window to the previous / next desktop and follow it |
-| `Super + 1–9 / 0` | Workspace 1–10 on the focused monitor |
-| `Super + Shift + 1–9 / 0` | Move a window to that workspace and follow it |
-| `Super + Shift + Alt + 1–9 / 0` | Send a window to that workspace without following |
+| `Ctrl + Shift + Super + Up / Down` | Move the focused window and follow it, using the same end-of-list wrap as desktop switching |
 
-The overview opens on every monitor, showing windows from that monitor's selected workspace and a sidebar of desktop previews.
+Native workspace number, mouse-wheel cycling, and whole-workspace monitor-move shortcuts are disabled while desktop bindings are enabled.
+
+The overview opens on every monitor, showing windows from that monitor's workspace for the current desktop and a sidebar of desktop previews.
 Click a desktop preview to switch desktops, or a window to focus it and close the overview.
 Drag a window onto another monitor's window area to move it there, or onto a desktop preview to send it there without following.
 Hold a drag near the sidebar's top or bottom edge to scroll, or press `Esc` to cancel it.
 Double-click a desktop's name to rename it; click **New desktop** or press `Ctrl + N` to create one.
 
-Type in the filter to search by window title or application across the displayed workspaces.
+Type in the filter to search the displayed desktop's windows by title or application.
 Use arrow keys to select a window, `Enter` to activate it, and `Space` to toggle an enlarged preview when the filter is empty.
 Use `Tab / Shift + Tab` to transfer keyboard control between monitors.
 Press `Esc` to restore a preview, clear the filter, or close the overview.
 
 Empty desktops are removed when you leave them, and remaining desktops are renumbered.
 Desktop assignments and names survive configuration reloads and shell restarts, but reset on logout or reboot.
-Disconnected monitors' workspaces transfer to another monitor and return when reconnected.
+Disconnected monitors' windows join a remaining monitor on the same desktop and return when their original monitor reconnects, unless they were moved in the meantime.
 Scratchpads and pinned windows remain global; unpin a window before moving it between desktops.
 
 ## Configuration
