@@ -150,7 +150,7 @@ BorderSurface {
         }
       }
       Text {
-        text: "Workspace " + tile.slotNumber + "  ·  " + tile.windows.length + (tile.windows.length === 1 ? " window" : " windows")
+        text: tile.windows.length + (tile.windows.length === 1 ? " window" : " windows")
         color: Color.menu.text
         opacity: 0.65
         font.family: Style.font.menuFamily

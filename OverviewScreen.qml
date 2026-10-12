@@ -96,8 +96,8 @@ PanelWindow { // qmllint disable uncreatable-type
     }
   }
   onAcceptsKeyboardChanged: if (opened && acceptsKeyboard) Qt.callLater(focusSearch)
-  // Native desktop/workspace shortcuts focus a client underneath this layer.
-  // Watch the native ID: collapsing desktops can leave the desktop index equal.
+  // Desktop switches focus a client underneath this layer. Watch the native
+  // workspace ID: collapsing desktops can leave the desktop index equal.
   onWorkspaceIdChanged: Qt.callLater(restoreKeyboardAfterSwitch)
   Component.onCompleted: {
     syncCards()
@@ -372,7 +372,7 @@ PanelWindow { // qmllint disable uncreatable-type
           elide: Text.ElideRight
         }
         Text {
-          text: "Workspace " + (surface.workspace ? surface.workspace.slot : "—") + "  /  " + surface.outputName
+          text: surface.outputName
           color: Color.menu.text
           opacity: 0.65
           font.family: Style.font.menuFamily
@@ -440,7 +440,7 @@ PanelWindow { // qmllint disable uncreatable-type
           spacing: Style.space(12)
           visible: surface.screenToplevels.length === 0
           Text { width: parent.width; text: surface.manager.filterText ? "No matching windows" : "A little room to think."; color: Color.menu.text; opacity: 0.85; font.family: Style.font.menuFamily; font.pixelSize: Style.font.heading; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
-          Text { width: parent.width; text: surface.manager.filterText ? "Try another title or application." : "This workspace is empty. Drag a window here from another desktop."; color: Color.menu.text; opacity: 0.6; font.family: Style.font.menuFamily; font.pixelSize: Style.font.body; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
+          Text { width: parent.width; text: surface.manager.filterText ? "Try another title or application." : "This desktop is empty on this monitor. Drag a window here from another desktop."; color: Color.menu.text; opacity: 0.6; font.family: Style.font.menuFamily; font.pixelSize: Style.font.body; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
         }
       }
 

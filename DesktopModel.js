@@ -14,19 +14,6 @@ function array(value) {
   return Array.prototype.slice.call(value)
 }
 
-function slots(snapshot, desktopId, output, toplevels, visibleSlot) {
-  var desktop = array(snapshot.desktops)[desktopId - 1]
-  var entry = desktop && desktop.outputs ? desktop.outputs[output] : null
-  if (!entry) return []
-  var occupied = {}
-  array(toplevels).forEach(function(w) {
-    if (w.workspace) occupied[w.workspace.id] = true
-  })
-  return array(entry.slots).map(function(id, i) {
-    return { id: id, slot: i + 1, selected: entry.selected === i + 1, occupied: !!occupied[id] }
-  }).filter(function(item) { return item.slot <= 5 || item.slot === visibleSlot || item.selected || item.occupied })
-}
-
 function windowRect(client, monitor, width, height) {
   var at = array(client.at), size = array(client.size)
   var mw = Math.max(1, monitor.width), mh = Math.max(1, monitor.height)
@@ -40,4 +27,4 @@ function windowRect(client, monitor, width, height) {
   }
 }
 
-if (typeof module !== "undefined") module.exports = { luaString, array, slots, windowRect }
+if (typeof module !== "undefined") module.exports = { luaString, array, windowRect }

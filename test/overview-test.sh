@@ -55,14 +55,14 @@ function windowsFor(snapshot, desktop, output, windows, query) {
 const layout = qmlJs('vendor/expose/Layout.js', {WindowModel})
 const icons = qmlJs('vendor/expose/IconResolver.js')
 const snapshot = {desktops:[
-  {outputs:{left:{slots:[1,2,3],selected:2},right:{slots:[4,5,6],selected:1}}},
-  {outputs:{left:{slots:[11,12,13],selected:3},right:{slots:[14,15,16],selected:2}}}
+  {outputs:{left:{slots:[1],selected:1},right:{slots:[4],selected:1}}},
+  {outputs:{left:{slots:[11],selected:1},right:{slots:[14],selected:1}}}
 ]}
 function top(address, output, workspace, title = 'Window', ratio = 1.6) {
   return {address,title,monitor:{name:output},workspace:{id:workspace},wayland:{appId:'terminal'},lastIpcObject:{mapped:true,class:'foot',size:[ratio*1000,1000]}}
 }
-const tops = [top('a','left',1),top('b','left',2,'Alpha editor'),top('c','right',4),top('d','right',5),top('e','left',13),top('f','right',15)]
-assertDeepEqual(model.selectedWorkspace(snapshot,1,'left'), {id:2,slot:2}, 'desktop thumbnails use the remembered workspace, not always slot one')
+const tops = [top('a','left',2),top('b','left',1,'Alpha editor'),top('c','right',4),top('d','right',5),top('e','left',11),top('f','right',14)]
+assertDeepEqual(model.selectedWorkspace(snapshot,1,'left'), {id:1,slot:1}, 'desktop thumbnails use the desktop workspace')
 assertDeepEqual(windowsFor(snapshot,1,'left',tops,'').map(w=>w.address), ['b'], 'left Exposé shows only its selected workspace')
 assertDeepEqual(windowsFor(snapshot,1,'right',tops,'').map(w=>w.address), ['c'], 'right Exposé has its own selected workspace')
 assertDeepEqual(windowsFor(snapshot,2,'left',tops,'').map(w=>w.address), ['e'], 'desktop switching changes the left workspace scope')
@@ -84,7 +84,7 @@ let seed = 42
 function random(n) { seed = (Math.imul(seed,1664525)+1013904223) >>> 0; return seed % n }
 for (let sample = 0; sample < 200; sample++) {
   const state = {desktops:Array.from({length:1+random(10)}, () => ({outputs:Object.fromEntries(
-    ['left','right','__proto__'].map(name => [name, {slots:[1+random(24),1+random(24)],selected:1+random(3)}])
+    ['left','right','__proto__'].map(name => [name, {slots:[1+random(24)],selected:1}])
   )}))}
   const windows = Array.from({length:random(150)}, (_,i) => {
     const w = top(String(i), ['left','right','__proto__','disconnected'][random(4)], random(26), i % 2 ? 'Alpha' : 'Beta')
@@ -120,7 +120,7 @@ assert(model.sameWindows([],undefined) && model.sameWindows(undefined,[]),'defer
 assertEqual(model.windowsFor(undefined,1,'left','').length,0,'an index binding that has not initialized returns an empty list')
 assert(!model.sameWindows(tops,tops.slice().reverse()), 'a changed card order is detected')
 assertDeepEqual(model.dropTarget(snapshot,tops[1],1,'right'), {address:'b',desktop:1,output:'right',slot:1}, 'dropping on another monitor uses its selected workspace')
-assertDeepEqual(model.dropTarget(snapshot,tops[1],2,'right'), {address:'b',desktop:2,output:'right',slot:2}, 'a cross-monitor desktop drop uses the destination remembered slot')
+assertDeepEqual(model.dropTarget(snapshot,tops[1],2,'right'), {address:'b',desktop:2,output:'right',slot:1}, 'a cross-monitor desktop drop uses the destination workspace')
 assertEqual(model.dropTarget(snapshot,tops[1],1,'left'),null,'dropping back on the same workspace is not presented as a move')
 assertEqual(model.dropTarget(snapshot,tops[1],2,'removed'),null,'disconnected drop destinations are rejected')
 assertEqual(model.dropTarget(snapshot,null,2,'right'),null,'a closed drag source cannot move a different window')

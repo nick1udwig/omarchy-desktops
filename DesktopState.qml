@@ -17,7 +17,6 @@ Item {
   readonly property var desktops: Model.array(snapshot.desktops)
   readonly property var monitors: Model.array(snapshot.monitors)
   readonly property string focusedMonitor: snapshot.focusedMonitor || ""
-  readonly property var toplevels: Hyprland.toplevels.values
   readonly property string statePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-desktops-" + Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") + ".json"
 
   function accept(text) {
@@ -79,7 +78,6 @@ Item {
     }
   }
 
-  function workspaceSlots(desktop, output, visibleSlot) { return Model.slots(snapshot, desktop, output, toplevels, visibleSlot) }
   function switchTo(desktop, output, slot) {
     command("o.desktops.switch(" + desktop + "," + Model.luaString(output) + "," + slot + ")")
   }
