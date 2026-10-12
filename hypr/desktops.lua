@@ -1,5 +1,5 @@
--- Optional desktop collections. Each desktop owns independent workspace slots
--- on every output. The shell reads a snapshot; only this module changes state.
+-- Each desktop owns one workspace on every output. The shell reads a snapshot;
+-- only this module changes state.
 local options = _G.omarchy_desktops or {}
 -- Omarchy's keybinding inspector evaluates this config with callable no-op
 -- tables in place of the compositor API. Register bindings there, but do not
@@ -18,7 +18,6 @@ end
 
 local M = {}
 o.desktops = M
-local slot_count = 10
 local runtime = assert(os.getenv("XDG_RUNTIME_DIR"))
 local signature = assert(os.getenv("HYPRLAND_INSTANCE_SIGNATURE"))
 local base = runtime .. "/omarchy-desktops-" .. signature
@@ -109,23 +108,6 @@ local function allocate()
   return state.next_workspace
 end
 
-local function vacant_slot(entry)
-  for slot, id in ipairs(entry.slots) do
-    if not hl.get_workspace(tostring(id)) then return slot end
-  end
-  return #entry.slots + 1
-end
-
-local function disconnected_slot(id)
-  for _, desktops in pairs(state.disconnected) do
-    for _, entry in ipairs(desktops) do
-      for slot, saved_id in ipairs(entry.slots) do
-        if saved_id == id then return entry, slot end
-      end
-    end
-  end
-end
-
 local function pin_workspace(id, output)
   if pinned_outputs[id] == output then return end
   hl.workspace_rule({ workspace = tostring(id), monitor = output })
@@ -137,11 +119,10 @@ local function ensure_output(name)
   for _, desktop in ipairs(state.desktops) do
     local entry = desktop.outputs[name]
     if not entry then
-      entry = { slots = {}, selected = 1 }
+      entry = { slots = { allocate() }, selected = 1 }
       desktop.outputs[name] = entry
     end
-    while #entry.slots < slot_count do entry.slots[#entry.slots + 1] = allocate() end
-    for _, id in ipairs(entry.slots) do pin_workspace(id, name) end
+    pin_workspace(entry.slots[1], name)
   end
 end
 
@@ -172,15 +153,6 @@ local function save()
   hl.dispatch(hl.dsp.event("omarchy-desktops"))
 end
 
-local function remember()
-  for _, monitor in ipairs(monitors()) do
-    local desktop_id, output, slot = locate(monitor.active_workspace)
-    if desktop_id == state.current then
-      state.desktops[desktop_id].outputs[output].selected = slot
-    end
-  end
-end
-
 local function on_monitor(workspace_id, output)
   pin_workspace(workspace_id, output)
   local workspace = hl.get_workspace(tostring(workspace_id))
@@ -191,20 +163,31 @@ local function on_monitor(workspace_id, output)
   hl.dispatch(hl.dsp.focus({ workspace = tostring(workspace_id) }))
 end
 
-local function apply_current(focus_output)
-  local desktop = state.desktops[state.current]
-  for _, monitor in ipairs(monitors()) do
-    ensure_output(monitor.name)
-    local entry = desktop.outputs[monitor.name]
-    on_monitor(entry.slots[entry.selected], monitor.name)
-  end
-  if focus_output and hl.get_monitor(focus_output) then
-    hl.dispatch(hl.dsp.focus({ monitor = focus_output }))
-  end
+-- Hyprland's focus dispatchers can warp the pointer across outputs. Suppress
+-- those warps while changing the displayed desktop, then restore the setting.
+local function without_cursor_warps(callback)
+  local warps_were_disabled = hl.get_config("cursor.no_warps")
+  if not warps_were_disabled then hl.config({ cursor = { no_warps = true } }) end
+  local ok, err = pcall(callback)
+  if not warps_were_disabled then hl.config({ cursor = { no_warps = false } }) end
+  if not ok then error(err) end
 end
 
--- Only the desktop being viewed may remain empty. Count all owned slots,
--- including hidden workspaces and workspaces recovered from disconnected outputs.
+local function apply_current(focus_output)
+  without_cursor_warps(function()
+    local desktop = state.desktops[state.current]
+    for _, monitor in ipairs(monitors()) do
+      ensure_output(monitor.name)
+      local entry = desktop.outputs[monitor.name]
+      on_monitor(entry.slots[1], monitor.name)
+    end
+    if focus_output and hl.get_monitor(focus_output) then
+      hl.dispatch(hl.dsp.focus({ monitor = focus_output }))
+    end
+  end)
+end
+
+-- Only the desktop being viewed may remain empty. Count every owned output.
 local function occupied_desktops(closing_window)
   local occupied = {}
   for _, window in ipairs(hl.get_windows()) do
@@ -254,25 +237,14 @@ function M.switch(desktop_id, output, slot)
   local monitor
   if output then monitor = hl.get_monitor(output) else monitor = hl.get_active_monitor() end
   assert(monitor and monitor.name, "Monitor is unavailable")
-  if slot then
-    slot = tonumber(slot)
-    local entry = state.desktops[desktop_id].outputs[monitor.name]
-    assert(slot and entry and entry.slots[slot], "Unknown workspace")
-  end
+  assert(not slot or tonumber(slot) == 1, "Each desktop has one workspace per monitor")
   transaction(function()
-    remember()
     state.current = desktop_id
-    if slot then
-      local entry = state.desktops[desktop_id].outputs[monitor.name]
-      if entry.selected ~= slot then entry.previous = entry.selected end
-      entry.selected = slot
-    end
     apply_current(monitor.name)
   end)
 end
 
-function M.step(direction)
-  assert(direction == -1 or direction == 1, "Direction must be -1 or 1")
+local function step_destination(direction)
   local target = state.current + direction
   if target < 1 then
     target = #state.desktops
@@ -282,9 +254,20 @@ function M.step(direction)
     -- empty-desktop step between occupied endpoints.
     if occupied[state.current] and occupied[target] then target = create() end
   elseif target > #state.desktops then
-    if occupied_desktops()[state.current] then create() else target = 1 end
+    if occupied_desktops()[state.current] then target = create() else target = 1 end
   end
-  M.switch(target)
+  return target
+end
+
+function M.step(direction)
+  assert(direction == -1 or direction == 1, "Direction must be -1 or 1")
+  M.switch(step_destination(direction))
+end
+
+function M.cycle_desktop(direction)
+  assert(direction == -1 or direction == 1, "Direction must be -1 or 1")
+  local target = (state.current - 1 + direction) % #state.desktops + 1
+  if target ~= state.current then M.switch(target) end
 end
 
 function M.add()
@@ -299,19 +282,6 @@ function M.rename(desktop_id, name)
   desktop.name = name
   desktop.renamed = true
   save()
-end
-
-function M.focus(slot, output)
-  M.switch(state.current, output, slot)
-end
-
-function M.cycle(direction, previous_workspace)
-  local monitor = hl.get_active_monitor()
-  if not monitor then return end
-  local entry = state.desktops[state.current].outputs[monitor.name]
-  if not entry then return end
-  local slot = previous_workspace and entry.previous or ((entry.selected - 1 + direction) % #entry.slots + 1)
-  if slot then M.focus(slot, monitor.name) end
 end
 
 local function window_by_address(address)
@@ -332,16 +302,14 @@ function M.move(desktop_id, output, slot, address, follow)
   local monitor
   if output then monitor = hl.get_monitor(output) else monitor = window.monitor end
   assert(monitor and monitor.name, "Monitor is unavailable")
-  local _, _, source_slot = locate(window.workspace)
-  slot = tonumber(slot) or source_slot or 1
+  assert(not slot or tonumber(slot) == 1, "Each desktop has one workspace per monitor")
   local entry = desktop.outputs[monitor.name]
-  assert(entry and entry.slots[slot], "Unknown workspace")
-  local workspace_id = entry.slots[slot]
+  assert(entry and entry.slots[1], "Unknown workspace")
+  local workspace_id = entry.slots[1]
   local focused = hl.get_active_monitor()
   transaction(function()
-    remember()
     -- Create the destination on the correct output without visiting it. Rules
-    -- also handle an empty slot recreated after Hyprland destroys it.
+    -- also handle an empty workspace recreated after Hyprland destroys it.
     pin_workspace(workspace_id, monitor.name)
     hl.dispatch(hl.dsp.window.move({ window = window, workspace = tostring(workspace_id), follow = false }))
     local workspace = hl.get_workspace(tostring(workspace_id))
@@ -349,10 +317,11 @@ function M.move(desktop_id, output, slot, address, follow)
       hl.dispatch(hl.dsp.workspace.move({ workspace = tostring(workspace_id), monitor = monitor.name }))
     end
     if follow then
-      state.current = desktop_id
-      entry.selected = slot
-      apply_current(monitor.name)
-      hl.dispatch(hl.dsp.focus({ window = window }))
+      without_cursor_warps(function()
+        state.current = desktop_id
+        apply_current(monitor.name)
+        hl.dispatch(hl.dsp.focus({ window = window }))
+      end)
     elseif focused then
       hl.dispatch(hl.dsp.focus({ monitor = focused.name }))
     end
@@ -362,23 +331,83 @@ end
 function M.move_step(direction, follow)
   assert(direction == -1 or direction == 1, "Direction must be -1 or 1")
   if not hl.get_active_window() then return end
-  local target = state.current + direction
-  if target < 1 then return end
-  if target > #state.desktops then create() end
-  M.move(target, nil, nil, nil, follow)
+  M.move(step_destination(direction), nil, nil, nil, follow)
 end
 
 function M.focus_window(address)
   local window = window_by_address(address)
   assert(window and window.mapped, "Window is unavailable")
   local desktop_id, output, slot = locate(window.workspace)
-  if desktop_id then M.switch(desktop_id, output, slot) end
+  if desktop_id then
+    M.switch(desktop_id, output, slot)
+  elseif window.workspace and window.workspace.id > 0 and not window.pinned then
+    M.move(state.current, nil, nil, address, true)
+  end
   hl.dispatch(hl.dsp.focus({ window = window }))
 end
 
--- A disconnected output's existing workspaces join a remaining output within
--- the same desktop. Reuse uncreated slots first; never combine or close windows.
--- With no outputs connected, defer recovery until one becomes available.
+local function move_windows(source, destination, output)
+  if source == destination then return {} end
+  pin_workspace(destination, output)
+  local workspace = hl.get_workspace(tostring(destination))
+  if workspace and workspace.monitor and workspace.monitor.name ~= output then
+    hl.dispatch(hl.dsp.workspace.move({ workspace = tostring(destination), monitor = output }))
+  end
+  local moved = {}
+  for _, window in ipairs(hl.get_windows()) do
+    if window.mapped and not window.pinned and window.workspace and window.workspace.id == source then
+      hl.dispatch(hl.dsp.window.move({ window = window, workspace = tostring(destination), follow = false }))
+      if window.address then moved[#moved + 1] = window.address end
+    end
+  end
+  return moved
+end
+
+-- On a reload from the multi-workspace version, keep each output's selected
+-- workspace and bring its other windows into it before retiring extra slots.
+local function normalize_entries()
+  local available = monitors()
+  if #available == 0 then return end
+  for _, desktop in ipairs(state.desktops) do
+    for output, entry in pairs(desktop.outputs) do
+      local canonical = entry.slots[entry.selected] or entry.slots[1] or allocate()
+      local destination_output = hl.get_monitor(output) and output or available[1].name
+      for _, id in ipairs(entry.slots) do
+        if id ~= canonical then move_windows(id, canonical, destination_output) end
+      end
+      entry.slots = { canonical }
+      entry.selected = 1
+      entry.previous = nil
+    end
+  end
+  for _, saved in pairs(state.disconnected) do
+    for _, entry in ipairs(saved) do
+      entry.slots = { entry.slots[entry.selected] or entry.slots[1] or allocate() }
+      entry.selected = 1
+      entry.previous = nil
+      entry.windows = entry.windows or {}
+    end
+  end
+end
+
+local function tracked_window(address)
+  for _, saved in pairs(state.disconnected) do
+    for _, entry in ipairs(saved) do
+      if entry.windows and entry.windows[address] then return true end
+    end
+  end
+end
+
+local function update_tracked_window(address, workspace_id)
+  for _, saved in pairs(state.disconnected) do
+    for _, entry in ipairs(saved) do
+      if entry.windows and entry.windows[address] then entry.windows[address] = workspace_id end
+    end
+  end
+end
+
+-- Merge a disconnected output's windows into the remaining output's one
+-- workspace for the same desktop. Track their addresses for restoration.
 local function recover_outputs()
   local connected, available = {}, monitors()
   for _, monitor in ipairs(available) do connected[monitor.name] = true end
@@ -395,18 +424,13 @@ local function recover_outputs()
     for desktop_id, desktop in ipairs(state.desktops) do
       local source, target = desktop.outputs[output], desktop.outputs[fallback]
       if source then
-        -- Keep the original slots and selection across transient disconnects,
-        -- including an external display dropping its link during resume.
-        local saved = { slots = {}, selected = source.selected, previous = source.previous }
+        local saved = { slots = { source.slots[1] }, selected = 1, windows = {} }
         state.disconnected[output][desktop_id] = saved
-        for slot, id in ipairs(source.slots) do
-          -- An earlier disconnect may have put another output's workspaces
-          -- here. Only its original output should reclaim them.
-          saved.slots[slot] = disconnected_slot(id) and allocate() or id
-          if hl.get_workspace(tostring(id)) then
-            target.slots[vacant_slot(target)] = id
-            pin_workspace(id, fallback)
-            hl.dispatch(hl.dsp.workspace.move({ workspace = tostring(id), monitor = fallback }))
+        for _, address in ipairs(move_windows(source.slots[1], target.slots[1], fallback)) do
+          if tracked_window(address) then
+            update_tracked_window(address, target.slots[1])
+          else
+            saved.windows[address] = target.slots[1]
           end
         end
         desktop.outputs[output] = nil
@@ -420,80 +444,78 @@ local function restore_output(output)
   local saved = state.disconnected[output]
   if not saved then return end
   for desktop_id, entry in ipairs(saved) do
-    for _, id in ipairs(entry.slots) do
-      local owner, current_output, slot = locate(id)
-      if owner then
-        state.desktops[owner].outputs[current_output].slots[slot] = allocate()
-      end
-      pin_workspace(id, output)
-      if hl.get_workspace(tostring(id)) then
-        hl.dispatch(hl.dsp.workspace.move({ workspace = tostring(id), monitor = output }))
+    local id = entry.slots[1]
+    if locate(id) then id = allocate() end
+    pin_workspace(id, output)
+    local workspace = hl.get_workspace(tostring(id))
+    if workspace and workspace.monitor and workspace.monitor.name ~= output then
+      hl.dispatch(hl.dsp.workspace.move({ workspace = tostring(id), monitor = output }))
+    end
+    state.desktops[desktop_id].outputs[output] = { slots = { id }, selected = 1 }
+    for address, expected in pairs(entry.windows or {}) do
+      local window = hl.get_window("address:" .. address)
+      if window and window.mapped and not window.pinned and window.workspace and window.workspace.id == expected then
+        hl.dispatch(hl.dsp.window.move({ window = window, workspace = tostring(id), follow = false }))
+        update_tracked_window(address, id)
       end
     end
-    state.desktops[desktop_id].outputs[output] = entry
   end
   state.outputs[output] = true
   state.disconnected[output] = nil
   return true
 end
 
--- Incorporate pre-existing workspaces without changing their IDs. New outputs
--- adopt unowned workspaces into the current desktop and get local slot numbers.
+-- Incorporate pre-existing workspaces without losing their windows. A new
+-- output keeps its active workspace; other positive workspaces are merged.
 local function initialize()
-  local restored = {}
+  local available = monitors()
+  if #available == 0 then return end
   if #state.desktops == 0 then create() end
-  for _, monitor in ipairs(monitors()) do
-    restored[monitor.name] = restore_output(monitor.name)
+  normalize_entries()
+  for _, monitor in ipairs(available) do
+    restore_output(monitor.name)
     local first = not state.outputs[monitor.name]
     if first then
-      local slots = {}
-      for _, workspace in ipairs(hl.get_workspaces()) do
-        if workspace.id > 0 and workspace.monitor and workspace.monitor.name == monitor.name and not locate(workspace) then
-          slots[#slots + 1] = workspace.id
+      local id = monitor.active_workspace and monitor.active_workspace.id
+      if not id or id < 1 or locate(id) then
+        id = nil
+        for _, workspace in ipairs(hl.get_workspaces()) do
+          if workspace.id > 0 and workspace.monitor and workspace.monitor.name == monitor.name and not locate(workspace) then
+            id = workspace.id
+            break
+          end
         end
       end
-      table.sort(slots)
-      local entry = { slots = slots, selected = 1 }
-      state.desktops[state.current].outputs[monitor.name] = entry
-      for i, id in ipairs(slots) do if monitor.active_workspace.id == id then entry.selected = i end end
+      state.desktops[state.current].outputs[monitor.name] = { slots = { id or allocate() }, selected = 1 }
     end
     ensure_output(monitor.name)
   end
   recover_outputs()
-  -- Workspaces may have appeared while the feature was disabled. Adopt those
-  -- too, including inactive workspaces with windows that emit no new events.
+  -- Include inactive workspaces with windows that emit no new events, such as
+  -- workspaces created while the feature was disabled.
   local existing = hl.get_workspaces()
   table.sort(existing, function(a, b) return a.id < b.id end)
   for _, workspace in ipairs(existing) do
     if workspace.id > 0 and not locate(workspace) and workspace.monitor and hl.get_monitor(workspace.monitor.name) then
       local entry = state.desktops[state.current].outputs[workspace.monitor.name]
-      entry.slots[#entry.slots + 1] = workspace.id
-      if not restored[workspace.monitor.name] and workspace.monitor.active_workspace.id == workspace.id then entry.selected = #entry.slots end
+      move_windows(workspace.id, entry.slots[1], workspace.monitor.name)
     end
   end
 end
 
 local function workspace_relocated(workspace, monitor)
   if busy or not workspace or not monitor or not hl.get_monitor(monitor.name) then return end
-  local desktop_id, output, slot = locate(workspace)
+  local desktop_id, output = locate(workspace)
   if not desktop_id or output == monitor.name or not hl.get_monitor(output) then return end
   transaction(function()
-    -- An explicit workspace move supersedes its pre-disconnect destination.
-    local saved, saved_slot = disconnected_slot(workspace.id)
-    if saved then saved.slots[saved_slot] = allocate() end
-    remember()
     local focused = hl.get_active_monitor()
     ensure_output(monitor.name)
-    local desktop = state.desktops[desktop_id]
-    desktop.outputs[output].slots[slot] = allocate()
-    local target = desktop.outputs[monitor.name]
-    local target_slot = vacant_slot(target)
-    target.slots[target_slot] = workspace.id
-    pin_workspace(workspace.id, monitor.name)
-    if monitor.active_workspace and monitor.active_workspace.id == workspace.id then
-      target.previous = target.selected
-      target.selected = target_slot
-      state.current = desktop_id
+    local target = state.desktops[desktop_id].outputs[monitor.name].slots[1]
+    move_windows(workspace.id, target, monitor.name)
+    pin_workspace(workspace.id, output)
+    local source = hl.get_workspace(tostring(workspace.id))
+    if source and source.monitor and source.monitor.name ~= output then
+      hl.dispatch(hl.dsp.workspace.move({ workspace = tostring(workspace.id), monitor = output }))
     end
     apply_current(focused and focused.name)
   end)
@@ -502,30 +524,24 @@ end
 
 local function workspace_changed(workspace)
   if busy or not workspace or workspace.id < 1 then return end
-  -- Native workspace-to-monitor bindings are still usable. Update ownership
-  -- before reacting to activation on that output, regardless of event order.
   if workspace_relocated(workspace, workspace.monitor) then return end
-  local desktop_id, output, slot = locate(workspace)
+  local desktop_id, output = locate(workspace)
   if desktop_id then
-    -- Hyprland can report workspace events during output removal, before the
-    -- final layout event. Recovery will restore the whole desktop afterwards.
     if not hl.get_monitor(output) then return end
-    local entry = state.desktops[desktop_id].outputs[output]
-    if entry.selected ~= slot then entry.previous = entry.selected; entry.selected = slot end
     if desktop_id ~= state.current then
-      M.switch(desktop_id, output, slot)
+      M.switch(desktop_id, output)
     else
       save()
     end
   elseif workspace.monitor then
-    -- Explicit external workspace commands join the current desktop. Never
-    -- strand windows on a workspace that our bar and overview cannot reach.
-    ensure_output(workspace.monitor.name)
-    local entry = state.desktops[state.current].outputs[workspace.monitor.name]
-    entry.slots[#entry.slots + 1] = workspace.id
-    entry.previous = entry.selected
-    entry.selected = #entry.slots
-    save()
+    if not hl.get_monitor(workspace.monitor.name) then return end
+    transaction(function()
+      local focused = hl.get_active_monitor()
+      ensure_output(workspace.monitor.name)
+      local target = state.desktops[state.current].outputs[workspace.monitor.name].slots[1]
+      move_windows(workspace.id, target, workspace.monitor.name)
+      apply_current(focused and focused.name)
+    end)
   end
 end
 
@@ -535,10 +551,12 @@ local function adopt_window_workspace(window, workspace)
   if not workspace or workspace.id < 1 or locate(workspace) or not workspace.monitor then return end
   local output = workspace.monitor.name
   if not hl.get_monitor(output) then return end
-  ensure_output(output)
-  local entry = state.desktops[state.current].outputs[output]
-  entry.slots[#entry.slots + 1] = workspace.id
-  save()
+  transaction(function()
+    ensure_output(output)
+    local target = state.desktops[state.current].outputs[output].slots[1]
+    move_windows(workspace.id, target, output)
+  end)
+  return true
 end
 
 local function refresh_layout()
@@ -556,8 +574,7 @@ if live_compositor then
   hl.on("workspace.move_to_monitor", workspace_relocated)
   hl.on("window.open", adopt_window_workspace)
   hl.on("window.move_to_workspace", function(window, workspace)
-    adopt_window_workspace(window, workspace)
-    if not busy then collapse_empty(); save() end
+    if not adopt_window_workspace(window, workspace) and not busy then collapse_empty(); save() end
   end)
   hl.on("window.close", function(window)
     if not busy then collapse_empty(window); save() end
@@ -575,17 +592,24 @@ local function bind(key, description, callback)
   o.bind(key, description, callback)
 end
 
-for slot = 1, 10 do
-  local key = "code:" .. (slot + 9)
-  bind("SUPER + " .. key, "Desktop workspace " .. slot, function() M.focus(slot) end)
-  bind("SUPER + SHIFT + " .. key, "Move window to desktop workspace " .. slot, function() M.move(state.current, nil, slot, nil, true) end)
-  bind("SUPER + SHIFT + ALT + " .. key, "Send window to desktop workspace " .. slot, function() M.move(state.current, nil, slot, nil, false) end)
+-- Remove stock native-workspace shortcuts as well as the old desktop-slot
+-- shortcuts. Leaving one behind would create a workspace outside the model.
+for keycode = 10, 19 do
+  local key = "code:" .. keycode
+  hl.unbind("SUPER + " .. key)
+  hl.unbind("SUPER + SHIFT + " .. key)
+  hl.unbind("SUPER + SHIFT + ALT + " .. key)
 end
-bind("SUPER + TAB", "Next desktop workspace", function() M.cycle(1) end)
-bind("SUPER + SHIFT + TAB", "Previous desktop workspace", function() M.cycle(-1) end)
-bind("SUPER + CTRL + TAB", "Former desktop workspace", function() M.cycle(0, true) end)
-bind("SUPER + mouse_down", "Next desktop workspace", function() M.cycle(1) end)
-bind("SUPER + mouse_up", "Previous desktop workspace", function() M.cycle(-1) end)
+for _, key in ipairs({
+  "SUPER + CTRL + TAB",
+  "SUPER + mouse_down", "SUPER + mouse_up",
+  "SUPER + SHIFT + ALT + LEFT", "SUPER + SHIFT + ALT + RIGHT",
+  "SUPER + SHIFT + ALT + UP", "SUPER + SHIFT + ALT + DOWN",
+}) do
+  hl.unbind(key)
+end
+bind("SUPER + TAB", "Next desktop", function() M.cycle_desktop(1) end)
+bind("SUPER + SHIFT + TAB", "Previous desktop", function() M.cycle_desktop(-1) end)
 bind("CTRL + SUPER + UP", "Previous desktop", function() M.step(-1) end)
 bind("CTRL + SUPER + DOWN", "Next desktop", function() M.step(1) end)
 bind("CTRL + SHIFT + SUPER + UP", "Move window to previous desktop", function() M.move_step(-1, true) end)

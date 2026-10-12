@@ -16,6 +16,17 @@ local displays = {
 local active_monitor = displays[1]
 local windows = {}
 local active_window
+local cursor = { x = 417.25, y = 266.5 }
+local no_warps = false
+local fail_focus_once = false
+local cursor_warps = 0
+local function warp_to(monitor)
+  if not no_warps then
+    cursor_warps = cursor_warps + 1
+    cursor.x = monitor.position.x + monitor.width / 2
+    cursor.y = monitor.position.y + monitor.height / 2
+  end
+end
 
 local function ensure_workspace(id, monitor)
   id = tonumber(id)
@@ -34,6 +45,14 @@ hl = {
   get_monitor = find_monitor,
   get_active_monitor = function() return active_monitor end,
   get_active_window = function() return active_window end,
+  get_config = function(key)
+    assert(key == "cursor.no_warps")
+    return no_warps
+  end,
+  config = function(values)
+    assert(type(values.cursor.no_warps) == "boolean")
+    no_warps = values.cursor.no_warps
+  end,
   get_windows = function()
     local result = {}
     for _, window in pairs(windows) do result[#result + 1] = window end
@@ -59,15 +78,18 @@ hl = {
   dispatch = function(command)
     local args = command.args
     if command.kind == "focus" then
+      if fail_focus_once then fail_focus_once = false; error("simulated focus failure") end
       if args.monitor then
         active_monitor = assert(find_monitor(args.monitor))
+        warp_to(active_monitor)
         event("monitor.focused", active_monitor)
       elseif args.workspace then
         local workspace = ensure_workspace(args.workspace, find_monitor(rules[tonumber(args.workspace)]))
         active_monitor = workspace.monitor
         active_monitor.active_workspace = workspace
+        warp_to(active_monitor)
         event("workspace.active", workspace)
-      elseif args.window then active_window = args.window; active_monitor = args.window.monitor end
+      elseif args.window then active_window = args.window; active_monitor = args.window.monitor; warp_to(active_monitor) end
     elseif command.kind == "workspace_move" then
       ensure_workspace(args.workspace).monitor = assert(find_monitor(args.monitor))
     elseif command.kind == "window_move" then
@@ -92,353 +114,232 @@ local function visible(desktop)
   end
 end
 
--- Keep both desktops occupied for the isolation and hotplug scenarios.
-windows.anchor1 = { mapped = true, workspace = workspaces[1] }
+-- Startup absorbs windows from unowned native workspaces into the desktop.
+windows.anchor1 = { address = "0x101", mapped = true, monitor = displays[1], workspace = workspaces[1] }
+windows["0x101"] = windows.anchor1
+windows.stranded = { address = "0x102", mapped = true, monitor = displays[2], workspace = ensure_workspace(10, displays[2]) }
+windows["0x102"] = windows.stranded
+active_window = windows.stranded
 local controller = load_controller()
-assert(displays[1].active_workspace.id == 1 and displays[2].active_workspace.id == 2, "adoption preserves existing workspaces")
-assert(selected(1, "left").slots[1] == 1 and selected(1, "right").slots[1] == 2, "each monitor has local workspace 1")
+assert(cursor.x == 417.25 and cursor.y == 266.5 and not no_warps and cursor_warps == 0,
+  "controller startup preserves precise cursor position and restores the cursor setting")
+assert(#selected(1, "left").slots == 1 and #selected(1, "right").slots == 1, "one workspace is owned per output")
+assert(windows.stranded.workspace.id == selected(1, "right").slots[1], "startup recovers a window from a native workspace")
 assert(snapshot():find('"width":720.0', 1, true) and snapshot():find('"height":1280.0', 1, true), "snapshot normalizes rotation and scale")
-controller.focus(3, "left")
-controller.focus(4, "right")
 visible(1)
-controller.step(1)
-visible(2)
-windows.anchor2 = { mapped = true, workspace = displays[2].active_workspace }
-assert(active_monitor.name == "right", "desktop switching preserves the focused output")
-controller.focus(2, "right")
-controller.step(-1)
-visible(1)
-assert(selected(1, "left").selected == 3 and selected(1, "right").selected == 4, "return restores both independent selections")
-controller.step(1)
-visible(2)
-assert(selected(2, "right").selected == 2, "each desktop remembers its own selections")
-controller.focus(5, "right")
-controller.cycle(0, true)
-assert(selected(2, "right").selected == 2, "former-workspace stays inside the desktop")
 
-active_window = { address = "0x123", mapped = true, monitor = displays[2], workspace = displays[2].active_workspace }
-windows[active_window.address] = active_window
-controller.move(1, nil, nil, nil, false)
-assert(state().current == 2, "send window leaves current desktop unchanged")
-assert(active_window.workspace.id == selected(1, "right").slots[2], "send preserves output and local slot")
-visible(2)
-controller.move(1, "left", 3, "0x123", true)
-assert(active_window.monitor.name == "left", "explicit destination chooses the output")
-assert(state().current == 1, "move-and-follow switches desktop")
+-- A prior controller may have many occupied slots. The selected workspace
+-- becomes canonical, and every other slot's windows are brought into it.
+local saved = io.open(os.getenv("XDG_RUNTIME_DIR") .. "/omarchy-desktops-test.lua", "w")
+saved:write('return {version=1,current=1,next_workspace=20000,desktops={{name="Desktop 1",outputs={left={slots={1,11},selected=1},right={slots={2,12},selected=2}}}},outputs={left=true,right=true},disconnected={}}')
+saved:close()
+windows.legacy_left = { address = "0x103", mapped = true, monitor = displays[1], workspace = ensure_workspace(11, displays[1]) }
+windows.legacy_right = { address = "0x104", mapped = true, monitor = displays[2], workspace = ensure_workspace(12, displays[2]) }
+windows["0x103"], windows["0x104"] = windows.legacy_left, windows.legacy_right
+controller = load_controller()
+assert(selected(1, "left").slots[1] == 1 and selected(1, "right").slots[1] == 12, "selected legacy workspaces become canonical")
+assert(#selected(1, "left").slots == 1 and #selected(1, "right").slots == 1, "legacy extra slots are retired")
+assert(windows.legacy_left.workspace.id == 1 and windows.stranded.workspace.id == 12, "windows from retired slots are preserved")
+assert(windows.legacy_right.workspace.id == 12 and state().desktops[1].outputs.right.selected == 1, "legacy selection is normalized")
 visible(1)
-active_window.pinned = true
-assert(not pcall(controller.move, 2, nil, nil, nil, false), "pinned windows cannot silently defeat desktop isolation")
-active_window.pinned = false
+
+-- Moving between desktops uses the destination's sole workspace.
+local warps_before_step = cursor_warps
+controller.step(1)
+assert(state().current == 2 and #state().desktops == 2, "next desktop is created when needed")
+assert(cursor.x == 417.25 and cursor.y == 266.5 and not no_warps
+  and cursor_warps == warps_before_step and active_monitor == displays[1],
+  "desktop step leaves the cursor fixed and restores focus to the original output")
+visible(2)
+local destination_right = selected(2, "right").slots[1]
+local warps_before_follow = cursor_warps
+controller.move(2, "right", nil, "0x102", true)
+assert(windows.stranded.workspace.id == destination_right and state().current == 2, "move-and-follow uses the destination workspace")
+assert(cursor.x == 417.25 and cursor.y == 266.5 and not no_warps and cursor_warps == warps_before_follow
+  and active_monitor == displays[2] and active_window == windows.stranded,
+  "move-and-follow focuses its window on another output without moving the cursor")
+controller.move(1, "right", nil, "0x102", false)
+assert(windows.stranded.workspace.id == 12 and state().current == 2, "silent overview moves stay in the correct desktop")
+assert(not pcall(controller.move, 2, nil, 2, "0x102", false), "extra workspace slots are rejected")
+assert(not pcall(controller.switch, 1, nil, 2), "switching to a retired slot is rejected")
 assert(not pcall(controller.move, 99), "invalid desktop is rejected")
 assert(not pcall(controller.move, 2, "missing"), "missing output is rejected")
-assert(not pcall(controller.move, 2, nil, 999), "invalid slot is rejected")
-assert(not pcall(controller.focus_window, "0xdead"), "closed windows cannot accidentally target the active window")
-assert(not pcall(controller.move, 2, nil, nil, "0xdead", false), "dragging a closed window cannot move a different window")
-
+assert(not pcall(controller.focus_window, "0xdead"), "closed windows cannot target the active window")
 controller.rename(1, 'Code "work" \\ tests')
 controller = load_controller()
-assert(state().desktops[1].name == 'Code "work" \\ tests', "names survive config reload without evaluating their contents")
-assert(state().current == 1 and selected(2, "right").selected == 2, "reload restores controller state")
-visible(1)
-
-hl.dispatch(hl.dsp.focus({ workspace = tostring(selected(2, "right").slots[3]) }))
-assert(state().current == 2, "an external focus into a different desktop switches the whole desktop")
+assert(state().desktops[1].name == 'Code "work" \\ tests', "desktop names survive reload")
+assert(state().current == 2 and #selected(1, "right").slots == 1, "one-workspace state survives reload")
 visible(2)
+
+-- Native workspace activation and external window rules cannot create a
+-- hidden second workspace. The controller brings their windows home.
+local external = ensure_workspace(888, displays[2])
+windows.external = { address = "0x105", mapped = true, monitor = displays[2], workspace = external }
+windows["0x105"] = windows.external
 hl.dispatch(hl.dsp.focus({ workspace = "888" }))
-assert(selected(2, "right").slots[#selected(2, "right").slots] == 888, "external workspaces remain reachable in the overview")
+assert(windows.external.workspace.id == selected(2, "right").slots[1], "external activation recovers its windows")
+visible(2)
+local inactive = ensure_workspace(889, displays[1])
+windows.inactive = { address = "0x106", mapped = true, monitor = displays[1], workspace = inactive }
+windows["0x106"] = windows.inactive
+event("window.open", windows.inactive)
+assert(windows.inactive.workspace.id == selected(2, "left").slots[1], "window rules targeting an inactive workspace are recovered")
+local moved = ensure_workspace(890, displays[2])
+windows.external.workspace, windows.external.monitor = moved, displays[2]
+event("window.move_to_workspace", windows.external, moved)
+assert(windows.external.workspace.id == selected(2, "right").slots[1], "external silent moves are recovered")
+
+-- A native move of an owned workspace transfers its windows into the target
+-- output's workspace while keeping each output's identity stable.
 controller.switch(1)
-controller.focus_window("0x123")
+local source_id = selected(1, "right").slots[1]
+local target_id = selected(1, "left").slots[1]
+workspaces[source_id].monitor = displays[1]
+event("workspace.move_to_monitor", workspaces[source_id], displays[1])
+assert(windows.stranded.workspace.id == target_id and windows.legacy_right.workspace.id == target_id, "native workspace moves merge windows into the destination output")
+assert(selected(1, "right").slots[1] == source_id and workspaces[source_id].monitor == displays[2], "source output retains its one workspace")
 visible(1)
 
--- Losing an empty Hyprland workspace does not change its logical slot.
-local empty = selected(1, "left").slots[8]
-workspaces[empty] = nil
-controller.focus(8, "left")
-assert(displays[1].active_workspace.id == empty, "empty slots are recreated with stable IDs")
-
-local inactive = ensure_workspace(889, displays[1])
-event("window.open", { workspace = inactive })
-assert(selected(1, "left").slots[#selected(1, "left").slots] == 889, "a rule opening a window on an inactive workspace remains reachable")
-assert(selected(1, "left").selected == 8, "adopting an inactive workspace does not switch the view")
-event("window.move_to_workspace", active_window, ensure_workspace(890, displays[1]))
-assert(selected(1, "left").slots[#selected(1, "left").slots] == 890, "external silent moves remain reachable")
-
--- Hyprland migrates workspaces before delivering the final output layout.
+-- Hotplug merges windows on the fallback output and restores their original
+-- workspace when the monitor returns, including across controller reload.
+controller.move(1, "right", nil, "0x102", true)
+local right_id = selected(1, "right").slots[1]
+local left_id = selected(1, "left").slots[1]
 local disconnected = displays[2]
-local before_disconnect = state()
-local recovered_id = selected(2, "right").slots[3]
 displays = { displays[1] }
 active_monitor = displays[1]
 for _, workspace in pairs(workspaces) do
   if workspace.monitor == disconnected then workspace.monitor = active_monitor end
 end
-event("workspace.active", workspaces[recovered_id])
 event("monitor.layout_changed")
-assert(state().outputs.right == nil, "disconnected output no longer has unreachable groups")
-for _, desktop in ipairs(state().desktops) do assert(desktop.outputs.right == nil) end
-local found = false
-for _, id in ipairs(selected(2, "left").slots) do if id == recovered_id then found = true end end
-assert(found, "disconnected workspace keeps its desktop when recovered to another output")
+assert(state().outputs.right == nil and #selected(1, "left").slots == 1, "disconnect keeps one fallback workspace")
+assert(windows.stranded.workspace.id == left_id and state().disconnected.right[1].windows["0x102"] == left_id, "disconnected windows remain visible and tracked")
 visible(1)
-controller.switch(2)
-visible(2)
-assert(active_window.mapped, "hotplug never closes windows")
-
--- Resume can disconnect just one display. Its windows and selections must
--- return even if Hyprland config was reloaded while that output was absent.
 controller = load_controller()
 disconnected.active_workspace = ensure_workspace(891, disconnected)
 displays[2] = disconnected
 event("monitor.layout_changed")
-for desktop_id, desktop in ipairs(before_disconnect.desktops) do
-  local before, after = desktop.outputs.right, selected(desktop_id, "right")
-  assert(after.selected == before.selected, "reconnect restores the selected workspace on each desktop")
-  for slot, id in ipairs(before.slots) do
-    assert(after.slots[slot] == id, "reconnect preserves original workspace IDs and slot numbers")
-    if workspaces[id] then assert(workspaces[id].monitor == disconnected, "existing windows return to their output") end
-  end
-end
-assert(selected(2, "right").slots[#selected(2, "right").slots] == 891, "reconnect also adopts workspaces created by Hyprland")
-visible(2)
-local assigned = {}
+assert(selected(1, "right").slots[1] == right_id and windows.stranded.workspace.id == right_id, "reconnect restores original output and windows")
 for _, desktop in ipairs(state().desktops) do
-  for _, entry in pairs(desktop.outputs) do
-    for _, id in ipairs(entry.slots) do assert(not assigned[id], "workspace ownership stays unique"); assigned[id] = true end
-  end
+  for _, entry in pairs(desktop.outputs) do assert(#entry.slots == 1 and entry.selected == 1, "hotplug preserves one workspace per output") end
 end
-local reconnected = displays
+visible(1)
+
+-- A headless interval leaves state intact until an output is available again.
+local connected = displays
 displays = {}
 active_monitor = nil
 event("monitor.layout_changed")
 assert(state().outputs.left and state().outputs.right, "headless interval preserves assignments")
-displays = reconnected
+displays = connected
 active_monitor = displays[1]
 event("monitor.layout_changed")
-visible(2)
+visible(1)
 
--- Native workspace-to-monitor operations update ownership, in either event order.
-local native_source = selected(2, "left").selected
-local native_workspace = workspaces[selected(2, "left").slots[native_source]]
-native_workspace.monitor = displays[2]
-displays[2].active_workspace = native_workspace
-event("workspace.active", native_workspace)
-event("workspace.move_to_monitor", native_workspace, displays[2])
-assert(selected(2, "left").slots[native_source] ~= native_workspace.id, "moved workspace releases its old output slot")
-local native_target = selected(2, "right")
-assert(native_target.slots[native_target.selected] == native_workspace.id, "native monitor move is adopted and selected on its destination")
-visible(2)
-local inactive_native = workspaces[selected(1, "left").slots[1]]
-inactive_native.monitor = displays[2]
-event("workspace.move_to_monitor", inactive_native, displays[2])
-assert(state().current == 2, "moving an inactive workspace does not change desktops")
-visible(2)
+-- Successive disconnects keep the first output's windows reachable and
+-- return them to their original output even when it reconnects first.
+local dock = { name = "dock", position = { x = 4000, y = 0 }, width = 1920, height = 1080, scale = 1 }
+dock.active_workspace = ensure_workspace(900, dock)
+displays[3] = dock
+event("monitor.layout_changed")
+local original_right = selected(1, "right").slots[1]
+local original_left = selected(1, "left").slots[1]
+displays = { connected[1], dock }
+active_monitor = connected[1]
+for _, workspace in pairs(workspaces) do
+  if workspace.monitor == connected[2] then workspace.monitor = connected[1] end
+end
+event("monitor.layout_changed")
+displays = { dock }
+active_monitor = dock
+for _, workspace in pairs(workspaces) do
+  if workspace.monitor == connected[1] then workspace.monitor = dock end
+end
+event("monitor.layout_changed")
+assert(windows.stranded.workspace.id == selected(1, "dock").slots[1], "successive disconnects keep windows on the remaining output")
+displays[2] = connected[2]
+event("monitor.layout_changed")
+assert(windows.stranded.workspace.id == original_right, "first output to reconnect recovers its tracked windows")
+displays[3] = connected[1]
+event("monitor.layout_changed")
+assert(selected(1, "left").slots[1] == original_left and selected(1, "right").slots[1] == original_right,
+  "both outputs recover their original workspace identities")
+for _, desktop in ipairs(state().desktops) do
+  for _, entry in pairs(desktop.outputs) do assert(#entry.slots == 1, "staggered reconnect keeps one workspace per output") end
+end
+visible(1)
 
+-- Retiring shortcuts must also remove the stock native workspace bindings.
+for keycode = 10, 19 do
+  local key = "code:" .. keycode
+  assert(bindings["SUPER + " .. key] == nil and bindings["SUPER + SHIFT + " .. key] == nil
+    and bindings["SUPER + SHIFT + ALT + " .. key] == nil, "native workspace shortcut is absent: " .. key)
+end
+for _, key in ipairs({ "SUPER + CTRL + TAB", "SUPER + mouse_down", "SUPER + mouse_up",
+  "SUPER + SHIFT + ALT + LEFT", "SUPER + SHIFT + ALT + RIGHT", "SUPER + SHIFT + ALT + UP", "SUPER + SHIFT + ALT + DOWN" }) do
+  assert(bindings[key] == nil, "native workspace navigation is absent: " .. key)
+end
 for _, key in ipairs({ "CTRL + SUPER + UP", "CTRL + SUPER + DOWN", "CTRL + SHIFT + SUPER + UP", "CTRL + SHIFT + SUPER + DOWN" }) do
   assert(type(bindings[key]) == "function", "desktop shortcut is registered: " .. key)
 end
-assert(bindings["SUPER + D"].kind == "global" and bindings["SUPER + D"].args == "omarchy-desktops:toggle", "Super+D reaches the resident plugin without starting a process")
-for _, key in ipairs({ "CTRL + ALT + UP", "CTRL + ALT + DOWN", "CTRL + ALT + SHIFT + UP", "CTRL + ALT + SHIFT + DOWN", "SUPER + CTRL + SPACE" }) do
-  assert(bindings[key] == nil, "old desktop shortcut is no longer registered: " .. key)
-end
-bindings["CTRL + SUPER + UP"]()
-assert(state().current == 1, "Ctrl+Super+Up selects the previous desktop")
-visible(1)
-bindings["CTRL + SUPER + DOWN"]()
-assert(state().current == 2, "Ctrl+Super+Down selects the next desktop")
-visible(2)
-bindings["CTRL + SUPER + DOWN"]()
-assert(state().current == 3 and #state().desktops == 3, "Down on the occupied last desktop creates a new desktop")
-visible(3)
-bindings["CTRL + SUPER + DOWN"]()
-assert(state().current == 1 and #state().desktops == 2, "Down on the empty new desktop wraps to the first and removes the empty desktop")
-visible(1)
-bindings["CTRL + SUPER + UP"]()
-assert(state().current == 3 and #state().desktops == 3, "Up on the first desktop wraps through a new empty desktop at the end")
-visible(3)
-bindings["CTRL + SUPER + DOWN"]()
-assert(state().current == 1 and #state().desktops == 2, "Down from the empty desktop created by Up wraps back to the first")
-visible(1)
-bindings["CTRL + SUPER + UP"]()
-visible(3)
-bindings["CTRL + SUPER + UP"]()
-assert(state().current == 2 and #state().desktops == 2, "Up from the empty final desktop selects the last occupied desktop and removes the empty one")
-visible(2)
-controller.move(2, "left", 1, "0x123", true)
+assert(type(bindings["SUPER + TAB"]) == "function" and type(bindings["SUPER + SHIFT + TAB"]) == "function",
+  "Super+Tab cycles desktops instead of workspaces")
+local count_before_cycle = #state().desktops
+bindings["SUPER + TAB"]()
+assert(#state().desktops == count_before_cycle, "Super+Tab does not create a desktop")
+bindings["SUPER + SHIFT + TAB"]()
+visible(state().current)
+assert(bindings["SUPER + D"].kind == "global" and bindings["SUPER + D"].args == "omarchy-desktops:toggle", "Super+D opens the overview")
+
+-- Moving a window past Desktop 1 must use the same new-bottom destination as
+-- stepping past Desktop 1, and follow the moved window there.
+active_window = windows.anchor1
+cursor.x, cursor.y = 2289.125, 911.875
+local before_wrap = #state().desktops
+assert(state().current == 1 and before_wrap >= 1, "window move boundary starts on Desktop 1")
+local warps_before_wrap = cursor_warps
 bindings["CTRL + SHIFT + SUPER + UP"]()
-assert(state().current == 1 and active_window.workspace.id == selected(1, "left").slots[1], "Ctrl+Shift+Super+Up brings the window to the previous desktop")
-visible(1)
-bindings["CTRL + SHIFT + SUPER + DOWN"]()
-assert(state().current == 2 and active_window.workspace.id == selected(2, "left").slots[1], "Ctrl+Shift+Super+Down brings the window to the next desktop")
-visible(2)
-assert(not pcall(controller.step, 0) and not pcall(controller.move_step, 20, false), "invalid directions are rejected")
+assert(state().current == before_wrap + 1 and #state().desktops == before_wrap + 1,
+  "moving a window up from Desktop 1 creates and follows a desktop at the bottom")
+assert(active_window.workspace.id == selected(before_wrap + 1, "left").slots[1], "upward wrap moves the focused window")
+visible(before_wrap + 1)
+controller.move(1, "left", nil, active_window.address, true)
+assert(state().current == 1 and #state().desktops == before_wrap, "returning the window removes the empty new desktop")
+assert(cursor.x == 2289.125 and cursor.y == 911.875 and not no_warps and cursor_warps == warps_before_wrap,
+  "upward move-and-follow also preserves the cursor")
+
+-- The controller respects an existing no-warps preference and restores its
+-- temporary override if Hyprland rejects a focus dispatch.
+no_warps = true
+controller.switch(1)
+assert(no_warps and cursor.x == 2289.125 and cursor.y == 911.875, "existing no-warps preference is retained")
+no_warps = false
+fail_focus_once = true
+assert(not pcall(controller.switch, 1), "focus failure is propagated")
+assert(not no_warps and cursor.x == 2289.125 and cursor.y == 911.875,
+  "focus failure restores the prior cursor setting")
+controller.switch(1)
+
 omarchy_desktops.enabled = false
 assert(load_controller() == nil and o.desktops == nil, "disabled controller is not callable")
-assert(io.open(os.getenv("XDG_RUNTIME_DIR") .. "/omarchy-desktops-test.json") == nil, "disabled controller removes its live snapshot")
-assert(state().current == 2, "disabling retains assignments for this session")
-ensure_workspace(892, displays[1])
+assert(io.open(os.getenv("XDG_RUNTIME_DIR") .. "/omarchy-desktops-test.json") == nil, "disabling removes its live snapshot")
+assert(state().current == 1, "disabling retains assignments in the session")
 omarchy_desktops.enabled = true
 omarchy_desktops.bindings = false
 bindings = {}
 controller = load_controller()
 assert(next(bindings) == nil, "custom bindings may be managed separately")
-local adopted = false
-for _, id in ipairs(selected(2, "left").slots) do if id == 892 then adopted = true end end
-assert(adopted, "re-enabling adopts workspaces created while disabled")
-controller.rename(2, string.rep("é", 60))
-assert(state().desktops[2].name == string.rep("é", 60), "desktop names accept Unicode characters")
-visible(2)
--- Outputs can return in either order after a dock briefly disconnects. A
--- workspace passing through two fallback monitors still has only one home.
-local left, right = displays[1], displays[2]
-local dock = { name = "dock", position = { x = 4000, y = 0 }, width = 1920, height = 1080, scale = 1 }
-dock.active_workspace = ensure_workspace(893, dock)
-displays[3] = dock
-event("monitor.layout_changed")
-local function unplug(monitor, fallback)
-  for i, display in ipairs(displays) do if display == monitor then table.remove(displays, i); break end end
-  active_monitor = fallback or find_monitor("left") or dock
-  for _, workspace in pairs(workspaces) do
-    if workspace.monitor == monitor then workspace.monitor = active_monitor end
-  end
-  event("monitor.layout_changed")
-end
-local function reconnect(monitor)
-  displays[#displays + 1] = monitor
-  event("monitor.layout_changed")
-end
-for _, order in ipairs({ { left, right }, { right, left } }) do
-  local before = state()
-  unplug(right)
-  unplug(left)
-  controller = load_controller()
-  reconnect(order[1])
-  reconnect(order[2])
-  local assigned = {}
-  for desktop_id, desktop in ipairs(state().desktops) do
-    for output, entry in pairs(desktop.outputs) do
-      for slot, id in ipairs(entry.slots) do
-        assert(not assigned[id], "staggered reconnect must not duplicate workspace ownership")
-        assigned[id] = true
-        if output ~= "dock" then
-          local original = before.desktops[desktop_id].outputs[output]
-          local original_id = original.slots[slot]
-          if original_id and (workspaces[original_id] or slot == original.selected) then
-            assert(id == original_id, "staggered reconnect restores occupied and selected slots")
-            if workspaces[id] then assert(workspaces[id].monitor.name == output, "staggered reconnect returns windows to their original output") end
-          end
-        end
-      end
-    end
-  end
-  visible(2)
-end
-local moved_id = right.active_workspace.id
-unplug(right, dock)
-local moved = workspaces[moved_id]
-moved.monitor = left
-event("workspace.move_to_monitor", moved, left)
-reconnect(right)
-assert(moved.monitor == left, "an intentional workspace move while undocked supersedes automatic restoration")
--- Empty desktops collapse only once they are no longer being viewed.
-windows = {}
-controller.focus(1, "left")
-assert(#state().desktops == 1 and state().current == 1, "cleanup retains the current empty desktop")
-controller.add()
-assert(#state().desktops == 1 and state().current == 1, "repeated creation cannot accumulate empty desktops")
-local only_workspace = selected(1, "left").slots[1]
-controller.step(1)
-controller.step(-1)
-assert(#state().desktops == 1 and state().current == 1 and selected(1, "left").slots[1] == only_workspace,
-  "both directions on a single empty desktop keep the same desktop")
-local keeper = { address = "0x456", mapped = true, monitor = left,
-  workspace = ensure_workspace(selected(1, "right").slots[9], right) }
-windows[keeper.address] = keeper
-controller.rename(1, "Keep me")
-controller.add()
-assert(#state().desktops == 2, "a window on a hidden workspace of another output keeps its desktop")
-controller.rename(2, "Temporary")
-controller.switch(1)
-assert(#state().desktops == 1 and state().desktops[1].name == "Keep me", "leaving an empty desktop removes it and preserves custom names")
-controller.add()
-controller.switch(1)
-keeper.mapped = false
-event("window.close", keeper)
-assert(#state().desktops == 1, "closing the last window keeps the viewed desktop")
-controller.add()
-assert(#state().desktops == 1 and state().desktops[1].name == "Desktop 1", "leaving a formerly occupied desktop collapses and renumbers it")
-keeper.mapped = true
-keeper.workspace = ensure_workspace(selected(1, "left").slots[1], left)
-keeper.monitor = left
-controller.add()
-controller.move(2, "left", 1, keeper.address, true)
-assert(#state().desktops == 1 and state().current == 1, "moving the last window and following collapses its source")
+assert(#selected(1, "left").slots == 1 and #selected(1, "right").slots == 1, "re-enabling retains one workspace per output")
+controller.rename(1, string.rep("é", 60))
+assert(state().desktops[1].name == string.rep("é", 60), "desktop names accept Unicode characters")
 visible(1)
-controller.add()
-controller.move(2, "left", 1, keeper.address, false)
-assert(#state().desktops == 1, "silently emptying an inactive desktop collapses it")
-controller.add()
-controller.switch(1)
--- Make a destination occupied so switching back does not remove it.
-local second = { address = "0x789", mapped = true, monitor = left,
-  workspace = keeper.workspace }
-windows[second.address] = second
-controller.add()
-controller.move(2, "left", 1, second.address, false)
-controller.switch(1)
-controller.move(2, "left", 1, keeper.address, false)
-assert(#state().desktops == 2 and state().current == 1, "silently emptying the viewed desktop keeps it until departure")
-controller.switch(2)
-assert(#state().desktops == 1 and state().current == 1, "departing after a silent move collapses the emptied source")
-controller.add()
-keeper.mapped = false
-second.mapped = false
-event("window.close", second)
-assert(#state().desktops == 1 and state().current == 1, "closing windows on an inactive desktop collapses it")
-keeper.mapped = true
-keeper.workspace = ensure_workspace(selected(1, "left").slots[1], left)
--- An external activation also performs cleanup after switching all outputs.
-controller.add()
-local target = keeper.workspace
-hl.dispatch(hl.dsp.focus({ workspace = tostring(target.id) }))
-assert(#state().desktops == 1 and state().current == 1, "external activation collapses the empty desktop left behind")
-visible(1)
-controller = load_controller()
-assert(#state().desktops == 1, "collapsed desktops stay removed after reload")
-controller.add()
-unplug(right, left)
-local saved_right = state().disconnected.right[2].slots[1]
-controller.move(2, "left", 1, keeper.address, true)
-assert(#state().desktops == 1 and #state().disconnected.right == 1, "collapse compacts disconnected output restoration entries")
-assert(state().disconnected.right[1].slots[1] == saved_right, "restoration stays attached to the surviving desktop")
-controller = load_controller()
-reconnect(right)
-assert(selected(1, "right").slots[1] == saved_right, "reconnect after collapse and reload restores the surviving output slots")
-visible(1)
--- Leaving an empty first desktop in the reverse direction must select the
--- existing occupied desktop, then promote it to Desktop 1.
-controller.add()
-local promoted = { address = "0xabc", mapped = true, monitor = left,
-  workspace = ensure_workspace(selected(2, "left").slots[1], left) }
-windows[promoted.address] = promoted
-controller.switch(1)
-controller.move(2, "left", 1, keeper.address, false)
-assert(#state().desktops == 2 and state().current == 1, "the empty first desktop stays available while viewed")
-controller.step(-1)
-assert(#state().desktops == 1 and state().current == 1 and state().desktops[1].name == "Desktop 1",
-  "reverse navigation promotes the occupied second desktop after leaving empty Desktop 1")
-assert(selected(1, "left").slots[1] == keeper.workspace.id and promoted.workspace.id == keeper.workspace.id,
-  "promotion preserves both windows' destination workspace")
-visible(1)
-print("ok - desktop isolation, restore, movement, external workspaces, reload, hotplug, disabling, and scaled output geometry")
+print("ok - one workspace per desktop/output, legacy migration, external recovery, hotplug, and bindings")
 LUA
 
 run_node_test <<'JS'
 const model = requireFromRoot('DesktopModel.js')
 assertDeepEqual(model.array({0:12, 1:34, length:2}), [12,34], 'Qt IPC sequences retain their geometry')
 assertEqual(model.luaString('"\\\n\u0001'), '"\\"\\\\\\010\\001"', 'Lua arguments quote control characters without allowing code injection')
-const state = { desktops: [{ outputs: { left: { slots: [1,2,3,4,5,6,7,8,9,10], selected: 9 } } }] }
-assertDeepEqual(model.slots(state, 1, 'left', [{workspace:{id:7}}]).map(s=>s.slot), [1,2,3,4,5,7,9], 'overview includes occupied and selected slots beyond the initial five')
-assertDeepEqual(model.slots(state, 2, 'left', []), [], 'stale desktop selection is safe')
 const monitor = { x: 1920, y: 0, width: 720, height: 1280 }
 const rect = model.windowRect({ at: [1920,0], size:[720,1280] }, monitor, 180, 120)
 assertEqual(rect.height, 120, 'portrait window fits the preview height')

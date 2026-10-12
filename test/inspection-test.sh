@@ -34,10 +34,16 @@ omarchy_desktops = { enabled = true }
 assert(controller() == o.desktops, "mock inspection loads without compositor initialization")
 local count = 0
 for _ in pairs(bindings) do count = count + 1 end
-assert(count == 40, "all workspace and desktop bindings remain discoverable")
+assert(count == 7, "desktop bindings remain discoverable")
+for keycode = 10, 19 do
+  local key = "code:" .. keycode
+  assert(unbound["SUPER + " .. key] and unbound["SUPER + SHIFT + " .. key]
+    and unbound["SUPER + SHIFT + ALT + " .. key], "native workspace bindings are removed")
+end
 assert(bindings["SUPER + D"].kind == "global" and bindings["SUPER + D"].args == "omarchy-desktops:toggle")
 assert(type(bindings["CTRL + SUPER + DOWN"]) == "function")
 assert(type(bindings["CTRL + SHIFT + SUPER + UP"]) == "function")
+assert(type(bindings["SUPER + TAB"]) == "function" and type(bindings["SUPER + SHIFT + TAB"]) == "function")
 
 bindings = {}
 omarchy_desktops.enabled = false
