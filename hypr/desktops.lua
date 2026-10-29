@@ -331,7 +331,12 @@ end
 function M.move_step(direction, follow)
   assert(direction == -1 or direction == 1, "Direction must be -1 or 1")
   if not hl.get_active_window() then return end
-  M.move(step_destination(direction), nil, nil, nil, follow)
+  -- Carrying a window keeps the last desktop occupied, so the normal step
+  -- would keep creating desktops instead of ever wrapping back to the top.
+  local target
+  if direction == 1 and state.current == #state.desktops then target = 1
+  else target = step_destination(direction) end
+  M.move(target, nil, nil, nil, follow)
 end
 
 function M.focus_window(address)

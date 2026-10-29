@@ -303,10 +303,34 @@ assert(state().current == before_wrap + 1 and #state().desktops == before_wrap +
   "moving a window up from Desktop 1 creates and follows a desktop at the bottom")
 assert(active_window.workspace.id == selected(before_wrap + 1, "left").slots[1], "upward wrap moves the focused window")
 visible(before_wrap + 1)
-controller.move(1, "left", nil, active_window.address, true)
-assert(state().current == 1 and #state().desktops == before_wrap, "returning the window removes the empty new desktop")
+
+-- Down wraps directly to Desktop 1, even if another output keeps the last
+-- desktop occupied. The moved window stays focused on its original output.
+local wrap_anchor = { address = "0x107", mapped = true, monitor = find_monitor("right"),
+  workspace = workspaces[selected(before_wrap + 1, "right").slots[1]] }
+windows[wrap_anchor.address] = wrap_anchor
+event("window.open", wrap_anchor)
+bindings["CTRL + SHIFT + SUPER + DOWN"]()
+assert(state().current == 1 and #state().desktops == before_wrap + 1,
+  "moving down from an occupied last desktop wraps without creating a desktop")
+assert(active_window == windows.anchor1 and active_window.workspace.id == selected(1, "left").slots[1]
+  and active_monitor == find_monitor("left"), "downward wrap brings and focuses the window on its original output")
+assert(wrap_anchor.workspace.id == selected(before_wrap + 1, "right").slots[1],
+  "downward wrap leaves the other output's window on the last desktop")
+visible(1)
+
+-- Wrapping with the last desktop's only window also removes its empty source.
+controller.move(before_wrap + 1, "left", nil, active_window.address, true)
+windows[wrap_anchor.address] = nil
+event("window.close", wrap_anchor)
+bindings["CTRL + SHIFT + SUPER + DOWN"]()
+assert(state().current == 1 and #state().desktops == before_wrap,
+  "downward wrap removes the emptied last desktop")
+assert(active_window == windows.anchor1 and active_window.workspace.id == selected(1, "left").slots[1],
+  "the last window follows the downward wrap to Desktop 1")
+visible(1)
 assert(cursor.x == 2289.125 and cursor.y == 911.875 and not no_warps and cursor_warps == warps_before_wrap,
-  "upward move-and-follow also preserves the cursor")
+  "move-and-follow preserves the cursor in both wrap directions")
 
 -- The controller respects an existing no-warps preference and restores its
 -- temporary override if Hyprland rejects a focus dispatch.
@@ -332,6 +356,17 @@ assert(next(bindings) == nil, "custom bindings may be managed separately")
 assert(#selected(1, "left").slots == 1 and #selected(1, "right").slots == 1, "re-enabling retains one workspace per output")
 controller.rename(1, string.rep("é", 60))
 assert(state().desktops[1].name == string.rep("é", 60), "desktop names accept Unicode characters")
+visible(1)
+
+-- With one desktop, Down keeps the focused window there without creating one.
+active_window = windows.anchor1
+windows = { [active_window.address] = active_window }
+controller.switch(1)
+assert(#state().desktops == 1, "single-desktop wrap setup removes empty desktops")
+controller.move_step(1, true)
+assert(state().current == 1 and #state().desktops == 1
+  and active_window.workspace.id == selected(1, "left").slots[1],
+  "moving down with one desktop stays on Desktop 1")
 visible(1)
 print("ok - one workspace per desktop/output, legacy migration, external recovery, hotplug, and bindings")
 LUA
