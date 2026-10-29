@@ -40,6 +40,19 @@ hyprctl configerrors
 omarchy restart shell
 ```
 
+### Recovery after a shell upgrade
+
+An upgrade that replaces `~/.config/omarchy/shell.json` can disable the plugin and remove its bar button.
+If the installation symlink and Hyprland configuration block still exist, restore the plugin with:
+
+```bash
+omarchy-shell shell rescanPlugins
+omarchy plugin enable nick1udwig.desktops --section left --after omarchy.menu
+omarchy plugin disable omarchy.workspaces
+```
+
+These commands preserve the other bar widgets and apply without a shell restart.
+
 ## Usage
 
 The bar shows the current desktop. Each monitor shows its workspace for that desktop.
