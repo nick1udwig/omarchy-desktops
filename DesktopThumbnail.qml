@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "DesktopModel.js" as Geometry
 import "OverviewModel.js" as Model
@@ -41,11 +42,11 @@ BorderSurface {
   property bool renaming: false
   height: thumbHeight + Style.space(60)
   radius: Style.cornerRadius
-  color: drop.containsDrag ? Style.pressedFillFor(Color.menu.text, Color.menu.selectedText)
-    : current ? Color.menu.selectedBackground
-    : pointer.containsMouse ? Style.hoverFillFor(Color.menu.text, Color.menu.selectedText) : "transparent"
-  borderSpec: highlighted ? Border.surfaceSpec("menu", "selected-border", Color.menu.selectedText, Style.selectedBorderWidth)
-    : pointer.containsMouse ? Border.controlSpec("hover-cursor", Color.menu.text, Color.menu.selectedText) : Border.none()
+  color: drop.containsDrag ? Style.pressedFillFor(Commons.Color.menu.text, Commons.Color.menu.selectedText)
+    : current ? Commons.Color.menu.selectedBackground
+    : pointer.containsMouse ? Style.hoverFillFor(Commons.Color.menu.text, Commons.Color.menu.selectedText) : "transparent"
+  borderSpec: highlighted ? Border.surfaceSpec("menu", "selected-border", Commons.Color.menu.selectedText, Style.selectedBorderWidth)
+    : pointer.containsMouse ? Border.controlSpec("hover-cursor", Commons.Color.menu.text, Commons.Color.menu.selectedText) : Border.none()
   Behavior on color { ColorAnimation { duration: 120 } }
 
   Item {
@@ -58,7 +59,7 @@ BorderSurface {
       width: Math.min(parent.width, parent.height * tile.output.width / Math.max(1, tile.output.height))
       height: Math.min(parent.height, parent.width * tile.output.height / Math.max(1, tile.output.width))
       radius: tile.previewRadius
-      Rectangle { anchors.fill: parent; color: Color.background }
+      Rectangle { anchors.fill: parent; color: Commons.Color.background }
       Image { anchors.fill: parent; source: tile.manager.wallpaper; sourceSize: Qt.size(1280, 1280); fillMode: Image.PreserveAspectCrop }
       Repeater {
         id: previewWindows
@@ -72,7 +73,7 @@ BorderSurface {
           width: placement.width
           height: placement.height
           radius: Style.cornerRadius * mini.width / Math.max(1, tile.output.width)
-          Rectangle { anchors.fill: parent; color: Color.background }
+          Rectangle { anchors.fill: parent; color: Commons.Color.background }
           Image {
             anchors.centerIn: parent
             width: Math.min(24, parent.width * 0.5, parent.height * 0.5)
@@ -97,8 +98,8 @@ BorderSurface {
       anchors.fill: mini
       radius: mini.radius
       color: "transparent"
-      borderSpec: tile.highlighted ? Border.hyprlandActiveSpec(Color.menu.selectedText, Style.focusBorderWidth)
-        : Border.controlSpec("normal", Color.menu.text, Color.menu.selectedText)
+      borderSpec: tile.highlighted ? Border.hyprlandActiveSpec(Commons.Color.menu.selectedText, Style.focusBorderWidth)
+        : Border.controlSpec("normal", Commons.Color.menu.text, Commons.Color.menu.selectedText)
     }
   }
 
@@ -121,9 +122,9 @@ BorderSurface {
         Layout.fillWidth: true
         text: tile.desktop ? tile.desktop.name : "Desktop " + tile.desktopId
         readOnly: !tile.renaming
-        color: tile.highlighted ? Color.menu.selectedText : Color.menu.text
-        selectionColor: Style.selectionFillFor(Color.menu.text, Color.menu.selectedText)
-        selectedTextColor: Color.menu.text
+        color: tile.highlighted ? Commons.Color.menu.selectedText : Commons.Color.menu.text
+        selectionColor: Style.selectionFillFor(Commons.Color.menu.text, Commons.Color.menu.selectedText)
+        selectedTextColor: Commons.Color.menu.text
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.body
         font.bold: tile.current
@@ -151,7 +152,7 @@ BorderSurface {
       }
       Text {
         text: tile.windows.length + (tile.windows.length === 1 ? " window" : " windows")
-        color: Color.menu.text
+        color: Commons.Color.menu.text
         opacity: 0.65
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.caption
@@ -160,7 +161,7 @@ BorderSurface {
     Text {
       visible: tile.current
       text: "✓"
-      color: Color.menu.selectedText
+      color: Commons.Color.menu.selectedText
       font.family: Style.font.menuFamily
       font.pixelSize: Style.font.body
     }

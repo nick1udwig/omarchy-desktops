@@ -5,6 +5,7 @@ import "../.." as Desktops
 import "WindowModel.js" as WindowModel
 import "Layout.js" as ExposeLayout
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 // Floating-caption presentation adapted from omarchy-expose. See UPSTREAM.md.
@@ -31,8 +32,8 @@ Item {
     readonly property bool exitingPreview: acceptsKeyboard && inLayout && slot === controller.previewExitIndex
     readonly property string applicationName: WindowModel.appIdFor(modelData) || "Application"
     readonly property var outlineSpec: focusedWindow || selected || hovered
-        ? Border.hyprlandActiveSpec(Color.menu.selectedText, hovered ? Style.hoverBorderWidth : Style.focusBorderWidth)
-        : Border.surfaceSpec("menu", "border", Color.menu.border, Style.normalBorderWidth)
+        ? Border.hyprlandActiveSpec(Commons.Color.menu.selectedText, hovered ? Style.hoverBorderWidth : Style.focusBorderWidth)
+        : Border.surfaceSpec("menu", "border", Commons.Color.menu.border, Style.normalBorderWidth)
     // Retain the last rectangle while filtered out, rather than moving to the origin.
     readonly property var packedRectSource: inLayout ? windowLayout[slot] : null
     property var packedRect: Qt.rect(0, 0, 1, 1)
@@ -75,7 +76,7 @@ Item {
                 height: Math.min(parent.height, parent.width / windowAspectRatio)
                 radius: card.previewRadius
 
-                Rectangle { anchors.fill: parent; color: Color.background }
+                Rectangle { anchors.fill: parent; color: Commons.Color.background }
                 Image {
                     anchors.centerIn: parent
                     width: Math.min(Style.space(64), parent.width * 0.3)
@@ -138,7 +139,7 @@ Item {
                 CardText {
                     Layout.alignment: Qt.AlignRight
                     text: String(card.controller.workspace ? card.controller.workspace.slot : 1)
-                    color: card.focusedWindow ? Color.accent : Color.menu.text
+                    color: card.focusedWindow ? Commons.Color.accent : Commons.Color.menu.text
                     font.pixelSize: Style.font.heading
                     font.bold: true
                 }
@@ -154,7 +155,7 @@ Item {
 
     component CardText: Text {
         textFormat: Text.PlainText
-        color: Color.menu.text
+        color: Commons.Color.menu.text
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.body
         elide: Text.ElideRight

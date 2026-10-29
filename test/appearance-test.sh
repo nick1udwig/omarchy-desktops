@@ -24,8 +24,8 @@ for (const radius of [0, 2, 8, 16, 24]) {
 }
 assert(!/radius:\s*(?:Style\.space\(|Math\.max\([1-9])/.test(screen + thumbnail + card), 'surface corners have no hardcoded positive radius')
 assert(clip.includes('layer.enabled: root.radius > 0') && card.includes('Desktops.PreviewClip {'), 'grid and sidebar share square/rounded preview clipping')
-assert(screen.includes('color: Color.menu.background') && screen.includes('color: Color.menu.scrim'), 'surfaces retain theme-provided menu color and opacity')
-assert(thumbnail.includes('Color.menu.selectedBackground') && thumbnail.includes('Color.menu.selectedText'), 'desktop selection uses the menu selection palette')
+assert(screen.includes('color: Commons.Color.menu.background') && screen.includes('color: Commons.Color.menu.scrim'), 'surfaces retain theme-provided menu color and opacity')
+assert(thumbnail.includes('Commons.Color.menu.selectedBackground') && thumbnail.includes('Commons.Color.menu.selectedText'), 'desktop selection uses the menu selection palette')
 for (const [name, text] of [['overview',screen],['thumbnail',thumbnail],['card',card]]) {
   assert(text.includes('Border.surfaceSpec(') && text.includes('Border.hyprlandActiveSpec('), `${name} preserves theme border gradients and widths`)
 }

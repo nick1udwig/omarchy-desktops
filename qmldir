@@ -1,1 +1,13 @@
 singleton DesktopState 1.0 DesktopState.qml
+CaptureCache 1.0 CaptureCache.qml
+CaptureScheduler 1.0 CaptureScheduler.qml
+CapturedPreview 1.0 CapturedPreview.qml
+DesktopBar 1.0 DesktopBar.qml
+DesktopThumbnail 1.0 DesktopThumbnail.qml
+ExposeCard 1.0 ExposeCard.qml
+Overview 1.0 Overview.qml
+OverviewScreen 1.0 OverviewScreen.qml
+PreviewClip 1.0 PreviewClip.qml
+WindowCapture 1.0 WindowCapture.qml
+WindowDropArea 1.0 WindowDropArea.qml
+WindowIndex 1.0 WindowIndex.qml

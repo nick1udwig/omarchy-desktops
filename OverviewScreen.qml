@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "vendor/expose/WindowModel.js" as WindowModel
 import "vendor/expose/Layout.js" as ExposeLayout
@@ -157,8 +158,8 @@ PanelWindow { // qmllint disable uncreatable-type
       firstFrameAt: firstFrameAt, firstFrameRequests: firstFrameRequests,
       slot: workspace ? workspace.slot : 0, windows: screenToplevels.map(function(w) { return w.address }),
       desktops: DesktopState.desktops.length, preview: previewIndex, keyboard: acceptsKeyboard,
-      appearance: { radius: Style.cornerRadius, panel: String(Color.menu.background), text: String(Color.menu.text),
-        selectedText: String(Color.menu.selectedText), railRadius: rail.radius, searchRadius: searchBox.radius } }
+      appearance: { radius: Style.cornerRadius, panel: String(Commons.Color.menu.background), text: String(Commons.Color.menu.text),
+        selectedText: String(Commons.Color.menu.selectedText), railRadius: rail.radius, searchRadius: searchBox.radius } }
   }
   function geometry() {
     var result = []
@@ -218,7 +219,7 @@ PanelWindow { // qmllint disable uncreatable-type
     opacity: surface.progress
     enabled: surface.opened
     Keys.onEscapePressed: surface.manager.close()
-    Rectangle { anchors.fill: parent; color: Color.background }
+    Rectangle { anchors.fill: parent; color: Commons.Color.background }
     Image {
       id: wallpaper
       anchors.fill: parent
@@ -237,7 +238,7 @@ PanelWindow { // qmllint disable uncreatable-type
       blur: 0.8
       saturation: -0.1
     }
-    Rectangle { anchors.fill: parent; color: Color.menu.scrim }
+    Rectangle { anchors.fill: parent; color: Commons.Color.menu.scrim }
 
     BorderSurface {
       id: rail
@@ -246,8 +247,8 @@ PanelWindow { // qmllint disable uncreatable-type
       anchors { top: parent.top; bottom: parent.bottom; left: parent.left; margins: Style.space(18) }
       width: surface.sidebarWidth
       radius: Style.cornerRadius
-      color: Color.menu.background
-      borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Style.normalBorderWidth)
+      color: Commons.Color.menu.background
+      borderSpec: Border.surfaceSpec("menu", "border", Commons.Color.menu.border, Style.normalBorderWidth)
       transform: Translate { x: -Style.space(24) * (1 - surface.progress) }
 
       ColumnLayout {
@@ -257,8 +258,8 @@ PanelWindow { // qmllint disable uncreatable-type
           Layout.fillWidth: true
           Layout.margins: Style.space(6)
           spacing: Style.space(6)
-          Text { text: "Desktops"; color: Color.menu.text; font.family: Style.font.menuFamily; font.pixelSize: Style.font.heading; font.bold: true }
-          Text { text: surface.outputName; color: Color.menu.text; opacity: 0.6; font.family: Style.font.menuFamily; font.pixelSize: Style.font.bodySmall }
+          Text { text: "Desktops"; color: Commons.Color.menu.text; font.family: Style.font.menuFamily; font.pixelSize: Style.font.heading; font.bold: true }
+          Text { text: surface.outputName; color: Commons.Color.menu.text; opacity: 0.6; font.family: Style.font.menuFamily; font.pixelSize: Style.font.bodySmall }
         }
         ListView {
           id: sidebar
@@ -286,9 +287,9 @@ PanelWindow { // qmllint disable uncreatable-type
           Layout.fillWidth: true
           Layout.preferredHeight: Style.space(42)
           radius: Style.cornerRadius
-          color: addPointer.pressed ? Style.pressedFillFor(Color.menu.text, Color.menu.selectedText) : Style.controlFill(false, addPointer.containsMouse, Color.menu.text, Color.menu.selectedText)
-          borderSpec: Border.controlSpec(addPointer.containsMouse ? "hover-cursor" : "normal", Color.menu.text, Color.menu.selectedText)
-          Text { anchors.centerIn: parent; text: "+  New desktop"; color: Color.menu.text; font.family: Style.font.menuFamily; font.pixelSize: Style.font.body }
+          color: addPointer.pressed ? Style.pressedFillFor(Commons.Color.menu.text, Commons.Color.menu.selectedText) : Style.controlFill(false, addPointer.containsMouse, Commons.Color.menu.text, Commons.Color.menu.selectedText)
+          borderSpec: Border.controlSpec(addPointer.containsMouse ? "hover-cursor" : "normal", Commons.Color.menu.text, Commons.Color.menu.selectedText)
+          Text { anchors.centerIn: parent; text: "+  New desktop"; color: Commons.Color.menu.text; font.family: Style.font.menuFamily; font.pixelSize: Style.font.body }
           MouseArea { id: addPointer; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: DesktopState.add() }
         }
       }
@@ -308,26 +309,26 @@ PanelWindow { // qmllint disable uncreatable-type
         Layout.alignment: Qt.AlignHCenter
         Layout.preferredHeight: Math.max(Style.space(48), Style.font.heading + Style.spacing.panelPadding)
         radius: Style.cornerRadius
-        color: Color.menu.background
+        color: Commons.Color.menu.background
         borderSpec: surface.acceptsKeyboard && surface.manager.filterText
-          ? Border.hyprlandActiveSpec(Color.menu.selectedText, Style.focusBorderWidth)
-          : Border.surfaceSpec("menu", "border", Color.menu.border, Style.normalBorderWidth)
+          ? Border.hyprlandActiveSpec(Commons.Color.menu.selectedText, Style.focusBorderWidth)
+          : Border.surfaceSpec("menu", "border", Commons.Color.menu.border, Style.normalBorderWidth)
         RowLayout {
           anchors { fill: parent; leftMargin: Style.space(20); rightMargin: Style.space(18) }
           spacing: Style.space(14)
           Item {
             Layout.preferredWidth: Style.space(17)
             Layout.preferredHeight: Style.space(17)
-            Rectangle { width: parent.width * 0.7; height: width; radius: width / 2; color: "transparent"; border.width: 1.8; border.color: Color.menu.text; opacity: 0.7 }
-            Rectangle { x: parent.width * 0.64; y: parent.height * 0.62; width: parent.width * 0.5; height: 1.8; rotation: 45; transformOrigin: Item.Left; color: Color.menu.text; opacity: 0.7 }
+            Rectangle { width: parent.width * 0.7; height: width; radius: width / 2; color: "transparent"; border.width: 1.8; border.color: Commons.Color.menu.text; opacity: 0.7 }
+            Rectangle { x: parent.width * 0.64; y: parent.height * 0.62; width: parent.width * 0.5; height: 1.8; rotation: 45; transformOrigin: Item.Left; color: Commons.Color.menu.text; opacity: 0.7 }
           }
           TextInput {
             id: search
             Layout.fillWidth: true
             text: surface.manager.filterText
-            color: Color.menu.text
-            selectionColor: Style.selectionFillFor(Color.menu.text, Color.menu.selectedText)
-            selectedTextColor: Color.menu.text
+            color: Commons.Color.menu.text
+            selectionColor: Style.selectionFillFor(Commons.Color.menu.text, Commons.Color.menu.selectedText)
+            selectedTextColor: Commons.Color.menu.text
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.heading
             selectByMouse: true
@@ -341,14 +342,14 @@ PanelWindow { // qmllint disable uncreatable-type
               anchors.fill: parent
               visible: !search.text
               text: "Filter windows…"
-              color: Color.menu.text
+              color: Commons.Color.menu.text
               opacity: 0.6
               font: search.font
             }
           }
           Text {
             text: surface.screenToplevels.length + (surface.screenToplevels.length === 1 ? " window" : " windows")
-            color: Color.menu.text
+            color: Commons.Color.menu.text
             opacity: 0.6
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.bodySmall
@@ -365,7 +366,7 @@ PanelWindow { // qmllint disable uncreatable-type
           Layout.fillWidth: true
           text: surface.desktop ? surface.desktop.name : "Desktops"
           textFormat: Text.PlainText
-          color: Color.menu.text
+          color: Commons.Color.menu.text
           font.family: Style.font.menuFamily
           font.pixelSize: Style.font.heading
           font.bold: true
@@ -373,7 +374,7 @@ PanelWindow { // qmllint disable uncreatable-type
         }
         Text {
           text: surface.outputName
-          color: Color.menu.text
+          color: Commons.Color.menu.text
           opacity: 0.65
           font.family: Style.font.menuFamily
           font.pixelSize: Style.font.caption
@@ -384,7 +385,7 @@ PanelWindow { // qmllint disable uncreatable-type
         Layout.fillWidth: true
         visible: DesktopState.error !== "" || !DesktopState.enabled
         text: DesktopState.error || "Desktop management is not active in this session."
-        color: Color.urgent
+        color: Commons.Color.urgent
         font.pixelSize: Style.font.body
         wrapMode: Text.WordWrap
       }
@@ -432,22 +433,22 @@ PanelWindow { // qmllint disable uncreatable-type
           z: 20
           radius: Style.cornerRadius
           color: "transparent"
-          borderSpec: Border.hyprlandActiveSpec(Color.menu.selectedText, Style.focusBorderWidth)
+          borderSpec: Border.hyprlandActiveSpec(Commons.Color.menu.selectedText, Style.focusBorderWidth)
         }
         Column {
           anchors.centerIn: parent
           width: parent.width * 0.8
           spacing: Style.space(12)
           visible: surface.screenToplevels.length === 0
-          Text { width: parent.width; text: surface.manager.filterText ? "No matching windows" : "A little room to think."; color: Color.menu.text; opacity: 0.85; font.family: Style.font.menuFamily; font.pixelSize: Style.font.heading; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
-          Text { width: parent.width; text: surface.manager.filterText ? "Try another title or application." : "This desktop is empty on this monitor. Drag a window here from another desktop."; color: Color.menu.text; opacity: 0.6; font.family: Style.font.menuFamily; font.pixelSize: Style.font.body; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
+          Text { width: parent.width; text: surface.manager.filterText ? "No matching windows" : "A little room to think."; color: Commons.Color.menu.text; opacity: 0.85; font.family: Style.font.menuFamily; font.pixelSize: Style.font.heading; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
+          Text { width: parent.width; text: surface.manager.filterText ? "Try another title or application." : "This desktop is empty on this monitor. Drag a window here from another desktop."; color: Commons.Color.menu.text; opacity: 0.6; font.family: Style.font.menuFamily; font.pixelSize: Style.font.body; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
         }
       }
 
       Text {
         Layout.fillWidth: true
         text: "↑ ↓ ← →  Select     Space  Preview     Enter  Open     Tab  Monitor     Esc  Close\nDrag to another monitor’s window area or to a desktop in its sidebar."
-        color: Color.menu.text
+        color: Commons.Color.menu.text
         opacity: 0.65
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.caption
