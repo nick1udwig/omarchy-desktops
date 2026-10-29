@@ -9,6 +9,10 @@ trap 'rm -rf "$desktop_test_dir"' EXIT
 
 XDG_RUNTIME_DIR="$desktop_test_dir" HYPRLAND_INSTANCE_SIGNATURE=test OMARCHY_DESKTOPS_PATH="$ROOT" lua - <<'LUA'
 local handlers, bindings, workspaces, rules = {}, {}, {}, {}
+local stock_monitor_keys = { "SUPER + SHIFT + CTRL + UP", "SUPER + SHIFT + CTRL + DOWN" }
+for _, key in ipairs(stock_monitor_keys) do
+  bindings[key] = function() error("stock monitor shortcut is still active") end
+end
 local displays = {
   { name = "left", position = { x = 0, y = 0 }, width = 1920, height = 1080, scale = 1 },
   { name = "right", position = { x = 1920, y = 0 }, width = 2560, height = 1440, scale = 2, transform = 1 },
@@ -279,6 +283,9 @@ for _, key in ipairs({ "SUPER + CTRL + TAB", "SUPER + mouse_down", "SUPER + mous
   "SUPER + SHIFT + ALT + LEFT", "SUPER + SHIFT + ALT + RIGHT", "SUPER + SHIFT + ALT + UP", "SUPER + SHIFT + ALT + DOWN" }) do
   assert(bindings[key] == nil, "native workspace navigation is absent: " .. key)
 end
+for _, key in ipairs(stock_monitor_keys) do
+  assert(bindings[key] == nil, "stock monitor shortcut is absent: " .. key)
+end
 for _, key in ipairs({ "CTRL + SUPER + UP", "CTRL + SUPER + DOWN", "CTRL + SHIFT + SUPER + UP", "CTRL + SHIFT + SUPER + DOWN" }) do
   assert(type(bindings[key]) == "function", "desktop shortcut is registered: " .. key)
 end
@@ -304,33 +311,39 @@ assert(state().current == before_wrap + 1 and #state().desktops == before_wrap +
 assert(active_window.workspace.id == selected(before_wrap + 1, "left").slots[1], "upward wrap moves the focused window")
 visible(before_wrap + 1)
 
--- Down wraps directly to Desktop 1, even if another output keeps the last
--- desktop occupied. The moved window stays focused on its original output.
-local wrap_anchor = { address = "0x107", mapped = true, monitor = find_monitor("right"),
+-- Down creates the next desktop while other windows keep the source occupied.
+local boundary_anchor = { address = "0x107", mapped = true, monitor = find_monitor("right"),
   workspace = workspaces[selected(before_wrap + 1, "right").slots[1]] }
-windows[wrap_anchor.address] = wrap_anchor
-event("window.open", wrap_anchor)
+windows[boundary_anchor.address] = boundary_anchor
+event("window.open", boundary_anchor)
 bindings["CTRL + SHIFT + SUPER + DOWN"]()
-assert(state().current == 1 and #state().desktops == before_wrap + 1,
-  "moving down from an occupied last desktop wraps without creating a desktop")
-assert(active_window == windows.anchor1 and active_window.workspace.id == selected(1, "left").slots[1]
-  and active_monitor == find_monitor("left"), "downward wrap brings and focuses the window on its original output")
-assert(wrap_anchor.workspace.id == selected(before_wrap + 1, "right").slots[1],
-  "downward wrap leaves the other output's window on the last desktop")
-visible(1)
+assert(state().current == before_wrap + 2 and #state().desktops == before_wrap + 2,
+  "moving down from the last desktop creates and follows the next desktop")
+assert(active_window == windows.anchor1 and active_window.workspace.id == selected(before_wrap + 2, "left").slots[1]
+  and active_monitor == find_monitor("left"), "moving down focuses the window on its original output")
+assert(boundary_anchor.workspace.id == selected(before_wrap + 1, "right").slots[1],
+  "moving down leaves the other output's window on the source desktop")
+visible(before_wrap + 2)
 
--- Wrapping with the last desktop's only window also removes its empty source.
-controller.move(before_wrap + 1, "left", nil, active_window.address, true)
-windows[wrap_anchor.address] = nil
-event("window.close", wrap_anchor)
+-- Up returns to an existing desktop and removes the emptied source.
+bindings["CTRL + SHIFT + SUPER + UP"]()
+assert(state().current == before_wrap + 1 and #state().desktops == before_wrap + 1,
+  "moving up to an existing desktop removes the emptied source")
+visible(before_wrap + 1)
+
+-- Moving the last window still allocates a destination before source cleanup.
+windows[boundary_anchor.address] = nil
+event("window.close", boundary_anchor)
+local retired_workspace = active_window.workspace.id
 bindings["CTRL + SHIFT + SUPER + DOWN"]()
-assert(state().current == 1 and #state().desktops == before_wrap,
-  "downward wrap removes the emptied last desktop")
-assert(active_window == windows.anchor1 and active_window.workspace.id == selected(1, "left").slots[1],
-  "the last window follows the downward wrap to Desktop 1")
-visible(1)
+assert(state().current == before_wrap + 1 and #state().desktops == before_wrap + 1,
+  "moving down removes the empty source and renumbers the new destination")
+assert(active_window.workspace.id ~= retired_workspace
+  and active_window.workspace.id == selected(state().current, "left").slots[1],
+  "the last window moves to the new desktop")
+visible(state().current)
 assert(cursor.x == 2289.125 and cursor.y == 911.875 and not no_warps and cursor_warps == warps_before_wrap,
-  "move-and-follow preserves the cursor in both wrap directions")
+  "move-and-follow preserves the cursor in both directions")
 
 -- The controller respects an existing no-warps preference and restores its
 -- temporary override if Hyprland rejects a focus dispatch.
@@ -358,16 +371,19 @@ controller.rename(1, string.rep("é", 60))
 assert(state().desktops[1].name == string.rep("é", 60), "desktop names accept Unicode characters")
 visible(1)
 
--- With one desktop, Down keeps the focused window there without creating one.
+-- With one occupied desktop, Down creates a second desktop and moves there.
 active_window = windows.anchor1
 windows = { [active_window.address] = active_window }
-controller.switch(1)
-assert(#state().desktops == 1, "single-desktop wrap setup removes empty desktops")
+controller.move(1, "left", nil, active_window.address, true)
+assert(#state().desktops == 1, "single-desktop setup removes empty desktops")
+local stationary = { address = "0x108", mapped = true, monitor = active_window.monitor, workspace = active_window.workspace }
+windows[stationary.address] = stationary
 controller.move_step(1, true)
-assert(state().current == 1 and #state().desktops == 1
-  and active_window.workspace.id == selected(1, "left").slots[1],
-  "moving down with one desktop stays on Desktop 1")
-visible(1)
+assert(state().current == 2 and #state().desktops == 2
+  and active_window.workspace.id == selected(2, "left").slots[1],
+  "moving down with one desktop creates and follows Desktop 2")
+assert(stationary.workspace.id == selected(1, "left").slots[1], "other windows stay on Desktop 1")
+visible(2)
 print("ok - one workspace per desktop/output, legacy migration, external recovery, hotplug, and bindings")
 LUA
 

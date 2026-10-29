@@ -63,9 +63,10 @@ When upgrading from the multi-workspace version, the selected workspace on each 
 | `Super + D` | Toggle the overview |
 | `Super + Tab / Shift + Super + Tab` | Cycle through existing desktops |
 | `Ctrl + Super + Up / Down` | Previous / next desktop; stepping past an occupied end creates an empty desktop before wrapping |
-| `Ctrl + Shift + Super + Up / Down` | Move the focused window and follow it; Down from the last desktop wraps to Desktop 1 |
+| `Ctrl + Shift + Super + Up / Down` | Move the focused window and follow it; stepping past an occupied end creates a desktop |
 
 Native workspace number, mouse-wheel cycling, and whole-workspace monitor-move shortcuts are disabled while desktop bindings are enabled.
+The desktop Up/Down shortcuts replace the stock vertical monitor-move shortcuts.
 
 The overview opens on every monitor, showing windows from that monitor's workspace for the current desktop and a sidebar of desktop previews.
 Click a desktop preview to switch desktops, or a window to focus it and close the overview.
