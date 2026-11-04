@@ -5,6 +5,9 @@ local options = _G.omarchy_desktops or {}
 -- tables in place of the compositor API. Register bindings there, but do not
 -- query monitors or touch the live session's state.
 local live_compositor = type(hl.get_monitors) == "function"
+if live_compositor and o.desktops and o.desktops.resume_workspaces then
+  o.desktops.resume_workspaces()
+end
 if not options.enabled then
   o.desktops = nil
   local runtime, signature = os.getenv("XDG_RUNTIME_DIR"), os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
@@ -18,6 +21,16 @@ end
 
 local M = {}
 o.desktops = M
+-- Omarchy's per-monitor reconciliation renumbers guest workspaces, invalidating
+-- desktop ownership. Let this controller handle layouts until it is disabled.
+if live_compositor and o.workspaces and type(o.workspaces.reconcile) == "function" then
+  local workspaces, reconcile = o.workspaces, o.workspaces.reconcile
+  local function paused(...) if not o.desktops then return reconcile(...) end end
+  workspaces.reconcile = paused
+  function M.resume_workspaces()
+    if workspaces.reconcile == paused then workspaces.reconcile = reconcile end
+  end
+end
 local runtime = assert(os.getenv("XDG_RUNTIME_DIR"))
 local signature = assert(os.getenv("HYPRLAND_INSTANCE_SIGNATURE"))
 local base = runtime .. "/omarchy-desktops-" .. signature
@@ -219,12 +232,12 @@ local function collapse_empty(closing_window)
   end
 end
 
-local function transaction(callback)
+local function transaction(callback, preserve_desktops)
   if busy then return end
   busy = true
   local ok, err = pcall(function()
     callback()
-    collapse_empty()
+    if not preserve_desktops then collapse_empty() end
   end)
   busy = false
   save()
@@ -565,7 +578,7 @@ local function refresh_layout()
     local focused = hl.get_active_monitor()
     initialize()
     apply_current(focused and focused.name)
-  end)
+  end, true)
 end
 
 if live_compositor then

@@ -82,6 +82,7 @@ Press `Esc` to restore a preview, clear the filter, or close the overview.
 Empty desktops are removed when you leave them, and remaining desktops are renumbered.
 Desktop assignments and names survive configuration reloads and shell restarts, but reset on logout or reboot.
 Disconnected monitors' windows join a remaining monitor on the same desktop and return when their original monitor reconnects, unless they were moved in the meantime.
+Monitor changes preserve the desktop count and each window's desktop.
 Scratchpads and pinned windows remain global; unpin a window before moving it between desktops.
 
 ## Configuration

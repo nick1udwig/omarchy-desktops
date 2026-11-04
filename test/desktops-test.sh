@@ -39,7 +39,12 @@ local function ensure_workspace(id, monitor)
 end
 for i, monitor in ipairs(displays) do monitor.active_workspace = ensure_workspace(i, monitor) end
 local initial_workspaces = { 1, 2 }
-local function event(name, ...) if handlers[name] then handlers[name](...) end end
+local native_layout_events = { ["hyprland.start"] = true, ["config.reloaded"] = true,
+  ["monitor.added"] = true, ["monitor.removed"] = true }
+local function event(name, ...)
+  if native_layout_events[name] then o.workspaces.reconcile(...) end
+  if handlers[name] then handlers[name](...) end
+end
 local function find_monitor(name)
   for _, monitor in ipairs(displays) do if monitor.name == name then return monitor end end
 end
@@ -105,7 +110,30 @@ hl = {
     end
   end,
 }
-o = { bind = function(key, description, callback) bindings[key] = callback end }
+-- Omarchy's per-monitor handler runs before this controller's layout handler.
+-- It renumbers occupied guest workspaces into each monitor's ten-slot block.
+local native_reconciliations = 0
+local function native_reconcile()
+  native_reconciliations = native_reconciliations + 1
+  for index, monitor in ipairs(displays) do
+    local first, last = (index - 1) * 10 + 1, index * 10
+    for _, window in pairs(windows) do
+      local workspace = window.workspace
+      if window.mapped and workspace.monitor == monitor and (workspace.id < first or workspace.id > last) then
+        for id = first, last do
+          if not workspaces[id] then
+            workspaces[workspace.id] = nil
+            workspace.id = id
+            workspaces[id] = workspace
+            break
+          end
+        end
+      end
+    end
+  end
+end
+o = { bind = function(key, description, callback) bindings[key] = callback end,
+  workspaces = { reconcile = native_reconcile } }
 omarchy_desktops = { enabled = true }
 local function load_controller() return dofile(os.getenv("OMARCHY_DESKTOPS_PATH") .. "/hypr/desktops.lua") end
 local function state() return dofile(os.getenv("XDG_RUNTIME_DIR") .. "/omarchy-desktops-test.lua") end
@@ -125,6 +153,7 @@ windows.stranded = { address = "0x102", mapped = true, monitor = displays[2], wo
 windows["0x102"] = windows.stranded
 active_window = windows.stranded
 local controller = load_controller()
+event("hyprland.start")
 assert(cursor.x == 417.25 and cursor.y == 266.5 and not no_warps and cursor_warps == 0,
   "controller startup preserves precise cursor position and restores the cursor setting")
 assert(#selected(1, "left").slots == 1 and #selected(1, "right").slots == 1, "one workspace is owned per output")
@@ -209,21 +238,44 @@ visible(1)
 controller.move(1, "right", nil, "0x102", true)
 local right_id = selected(1, "right").slots[1]
 local left_id = selected(1, "left").slots[1]
+local before_disconnect = state()
+local window_desktops, window_workspaces = {}, {}
+for address, window in pairs(windows) do
+  window_workspaces[address] = window.workspace.id
+  for id, desktop in ipairs(before_disconnect.desktops) do
+    for _, entry in pairs(desktop.outputs) do
+      if window.workspace.id == entry.slots[1] then window_desktops[address] = id end
+    end
+  end
+end
 local disconnected = displays[2]
 displays = { displays[1] }
 active_monitor = displays[1]
 for _, workspace in pairs(workspaces) do
   if workspace.monitor == disconnected then workspace.monitor = active_monitor end
 end
+event("monitor.removed", disconnected)
 event("monitor.layout_changed")
+assert(#state().desktops == #before_disconnect.desktops and state().current == before_disconnect.current,
+  "disconnect preserves desktop count and selection")
+for address, id in pairs(window_desktops) do
+  assert(windows[address].workspace.id == selected(id, "left").slots[1], "disconnect preserves every window's desktop")
+  assert(state().desktops[id].name == before_disconnect.desktops[id].name, "disconnect preserves desktop names")
+end
 assert(state().outputs.right == nil and #selected(1, "left").slots == 1, "disconnect keeps one fallback workspace")
 assert(windows.stranded.workspace.id == left_id and state().disconnected.right[1].windows["0x102"] == left_id, "disconnected windows remain visible and tracked")
 visible(1)
 controller = load_controller()
 disconnected.active_workspace = ensure_workspace(891, disconnected)
 displays[2] = disconnected
+event("monitor.added", disconnected)
 event("monitor.layout_changed")
+event("config.reloaded")
+assert(native_reconciliations == 0, "native workspace renumbering is paused across hotplug and controller reloads")
 assert(selected(1, "right").slots[1] == right_id and windows.stranded.workspace.id == right_id, "reconnect restores original output and windows")
+for address, id in pairs(window_workspaces) do
+  assert(windows[address].workspace.id == id, "reconnect restores every window's original workspace")
+end
 for _, desktop in ipairs(state().desktops) do
   for _, entry in pairs(desktop.outputs) do assert(#entry.slots == 1 and entry.selected == 1, "hotplug preserves one workspace per output") end
 end
@@ -359,6 +411,7 @@ controller.switch(1)
 
 omarchy_desktops.enabled = false
 assert(load_controller() == nil and o.desktops == nil, "disabled controller is not callable")
+assert(o.workspaces.reconcile == native_reconcile, "disabling restores native workspace reconciliation")
 assert(io.open(os.getenv("XDG_RUNTIME_DIR") .. "/omarchy-desktops-test.json") == nil, "disabling removes its live snapshot")
 assert(state().current == 1, "disabling retains assignments in the session")
 omarchy_desktops.enabled = true
@@ -383,6 +436,19 @@ assert(state().current == 2 and #state().desktops == 2
   and active_window.workspace.id == selected(2, "left").slots[1],
   "moving down with one desktop creates and follows Desktop 2")
 assert(stationary.workspace.id == selected(1, "left").slots[1], "other windows stay on Desktop 1")
+visible(2)
+
+-- Output refreshes must not remove desktops, even if their windows are
+-- temporarily unmapped while the compositor changes its monitor layout.
+stationary.mapped = false
+event("monitor.layout_changed")
+assert(#state().desktops == 2 and state().current == 2, "layout refresh preserves an empty inactive desktop")
+controller = load_controller()
+assert(#state().desktops == 2 and state().current == 2, "controller reload preserves an empty inactive desktop")
+stationary.mapped = true
+o.workspaces = nil
+controller = load_controller()
+assert(#state().desktops == 2, "older Omarchy versions do not require native workspace reconciliation")
 visible(2)
 print("ok - one workspace per desktop/output, legacy migration, external recovery, hotplug, and bindings")
 LUA

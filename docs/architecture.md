@@ -8,11 +8,20 @@ Desktop collections are an opt-in Omarchy plugin implemented with Hyprland's Lua
 
 Omarchy's keybinding inspector also evaluates that configuration, using callable no-op tables instead of the compositor API. The controller registers its bindings in that environment without querying monitors, subscribing to events, or accessing session state.
 
+While enabled, the controller pauses Omarchy's native per-monitor workspace reconciliation.
+That handler renumbers guest workspaces and would invalidate desktop ownership.
+Disabling the controller restores the native handler.
+
 Each desktop contains one native numeric Hyprland workspace ID per output. The serialized state retains a one-element `slots` array for compatibility with earlier sessions. Existing workspaces are adopted; newly allocated IDs start above 10000 and skip both existing and reserved IDs. On upgrade, the previously selected workspace becomes the sole workspace for that desktop and output, and windows from its other slots are moved into it. Unowned positive workspaces are merged into the current desktop's workspace on their output instead of becoming additional slots.
 
 Switching desktop visits each output's workspace, then restores the intended focused output. A transaction guard suppresses reactions to the controller's own intermediate workspace events. This coordinates native dispatchers; it is not a compositor-level atomic transition or a custom cross-monitor animation.
 
-After controller transactions and window close/move events, empty inactive desktops are removed. Occupancy counts mapped, unpinned windows across owned workspaces. The current desktop is retained even when empty. Desktop indices, default names, and disconnected-output restoration entries compact together; native workspace IDs and custom names remain intact. Cleanup is deferred during completely headless intervals.
+After desktop actions and window close/move events, empty inactive desktops are removed.
+Occupancy counts mapped, unpinned windows across owned workspaces.
+The current desktop is retained even when empty.
+Desktop indices, default names, and disconnected-output restoration entries compact together; native workspace IDs and custom names remain intact.
+Monitor layout refreshes and controller initialization skip cleanup to preserve the desktop count.
+Cleanup is deferred during completely headless intervals.
 
 Window moves use explicit validated window addresses and silent native movement, with a workspace rule pinning the destination to its output. A follow operation then switches all outputs and focuses the window. Closed windows and disconnected destinations fail rather than falling back to an unrelated active window or output. Pinned windows are rejected, and special workspaces are outside desktop ownership.
 
